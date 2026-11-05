@@ -3,11 +3,11 @@
 InfoGear is a patched and restructured fork of **GearInfo** by Sebyg666 (https://github.com/sebyg666/GearInfo),
 based on GearInfo 1.7.2.9. See CHANGES.md in the package for everything that was fixed or changed.
 
-![Gi logo](https://i.imgur.com/g0iJMJk.jpg# )
+![IG logo](https://i.imgur.com/T2oofG9.png)
 
 This is a multi-purpose addon that tracks your currently equipped gear and buffs to display valuable information.
 
-![Imgur](https://i.imgur.com/L27g5JD.png)  
+![Imgur](https://i.imgur.com/1ZTpXC6.png)  
 The addon can be used in conjunction with Gearswap to facilitate gear swapping.
 
 **Commands:** `//ig` or `//infogear` (the original used `//gi`). `//ig help` lists everything.
