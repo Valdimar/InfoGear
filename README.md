@@ -19,7 +19,7 @@ The widgets are drawn as flat dark cards, 4 across (228 px wide, the same width 
 plain dark panel. A number over its cap turns soft red. The old bracket tiles, header strips and logo are gone;
 the only art is `textures/cards/card.png` and `textures/cards/panel.png`.
 
-![cards](docs/layout-cards.png)
+![cards]
 
 * Which cards are shown is still set with `//ig show ...` (`//ig show all`, `//ig hide`).
 * **Speed** card (on by default, `//ig show speed` to toggle): your movement speed as +/- %, the same number as
@@ -34,13 +34,13 @@ the only art is `textures/cards/card.png` and `textures/cards/panel.png`.
   cards: normal 4 across 228 x 204, small 188 x 164; 6 across 340 x 164 / 280 x 132. Sizes are `card_sizes` in
   `Layouts.lua`. (`//ig scale` still works on top of either.)
 
-  ![sizes](docs/sizes.png)
+  ![sizes]
 * **Grouping** (v1.9): at any width, a group of cards (haste, DT, TP + STP, Acc/Att, ranged, Eva/Def, DW, MA, Speed,
   and each extra group) that fits in a row is never split over two rows; a bigger group wraps from the start of a
   row; small groups fill gaps left in earlier rows; UGS goes last (or in a gap). The order of the groups is
   `card_groups` at the top of `Layouts.lua`.
 
-  ![columns](docs/columns.png)
+  ![columns]
 * `//ig columns 4|5|6` sets how many cards go in a row (4 = default, the original width). Wider is shorter:
   18 cards are 228 x 204 px at 4, 284 x 164 at 5, 340 x 124 at 6. Saved per character.
 * Drag the panel to move it, as before.
@@ -61,7 +61,7 @@ the only art is `textures/cards/card.png` and `textures/cards/panel.png`.
   The first time 1.7 loads on a character it reads your saved gear again (one time, chat says so), so the new stats
   are known.
 
-  ![extra cards](docs/layout-cards-extra.png)
+  ![extra cards]
 * **JSE neck ranks** (v1.10): the augmentable JSE necks (Futhark Torque, Knight's Beads, War. Beads... all 22 jobs,
   base / +1 / +2) get their rank bonuses added, e.g. Futhark Torque +2 R25: Damage taken -7%, HP+60, STR/MND+15.
   Windower can't read these from the item, so they come from `res/JSE_Neck_Ranks.lua` (max-rank values from
