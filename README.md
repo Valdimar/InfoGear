@@ -1,4 +1,4 @@
-# InfoGear v1.24
+# InfoGear
 
 InfoGear is a patched and restructured fork of **GearInfo** by Sebyg666 (https://github.com/sebyg666/GearInfo),
 based on GearInfo 1.7.2.9. See CHANGES.md in the package for everything that was fixed or changed.
