@@ -10,10 +10,8 @@ This is a multi-purpose addon that tracks your currently equipped gear and buffs
 ![Imgur](https://i.imgur.com/1ZTpXC6.png)  
 The addon can be used in conjunction with Gearswap to facilitate gear swapping.
 
-**Commands:** `//ig` or `//infogear` (the original used `//gi`). `//ig help` lists everything.
+**Commands:** `//ig` or `//infogear`. `//ig help` lists everything.
 The Gearswap command is still `gs c gearinfo ...`, so existing Gearswap files keep working.
-
-The original wiki (https://github.com/sebyg666/GearInfo/wiki) still describes the features; replace `//gi` with `//ig`.
 
 ## Display (v1.4)
 
