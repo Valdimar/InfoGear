@@ -213,13 +213,14 @@ function check_buffs()
 				else
 					for i=1, 3 do
 						if Geo_Spells[v.indi.id].effect[i] then
-							this_buff[Geo_Spells[v.indi.id].effect[i]] = math.floor((Geo_Spells[v.indi.id]["900 skill"] + boost) * v.indi.boost) -- and multiply by bolster
+							this_buff[Geo_Spells[v.indi.id].effect[i]] = math.floor((Geo_Spells[v.indi.id]["900 skill"] + boost) * (v.indi.boost or 1)) -- and multiply by bolster
 							duplicate_id[v.indi.id] = true
 						end
 					end
 				end
 			end
-			if v.geo and v.geo.id and v.mob and v.mob.pet_index and windower.ffxi.get_mob_by_index(v.mob.pet_index).distance:sqrt() < 6 and Geo_Spells[v.geo.id].buff.id == buff.id then
+			local luopan = v.geo and v.geo.id and v.mob and v.mob.pet_index and windower.ffxi.get_mob_by_index(v.mob.pet_index)
+			if luopan and luopan.distance:sqrt() < 6 and Geo_Spells[v.geo.id].buff.id == buff.id then
 				local boost = 0
 				if table.containskey(settings.Geos, member_name:lower()) then
 					if settings.Geos[member_name:lower()] then 
@@ -231,7 +232,7 @@ function check_buffs()
 				end
 				for i=1, 2 do
 					if Geo_Spells[v.geo.id].effect[i] then
-						this_buff[Geo_Spells[v.geo.id].effect[i]] = math.floor((Geo_Spells[v.geo.id]["900 skill"] + boost) * v.geo.boost) -- and multiply by bolster / EA/ BoG
+						this_buff[Geo_Spells[v.geo.id].effect[i]] = math.floor((Geo_Spells[v.geo.id]["900 skill"] + boost) * (v.geo.boost or 1)) -- and multiply by bolster / EA/ BoG
 					end
 				end
 				break

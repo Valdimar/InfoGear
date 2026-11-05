@@ -1,6 +1,6 @@
 _addon.name = 'InfoGear'
 _addon.author = 'Valdimar @ Phoenix'	-- based on GearInfo by Sebyg666
-_addon.version = '1.18'
+_addon.version = '1.25'
 
 -- Raise this whenever the gear parser learns new stats: each character's saved gear is then read again once.
 GEAR_PARSER_VERSION = 7	-- 3: v1.11 Unity table; 4: v1.12 pet damage taken; 5: v1.15 pet absorb fix; 6: v1.17 pet regen; 7: v1.18 cape augments
@@ -25,9 +25,11 @@ Bard_Songs = require('res/Bard_Songs')
 Geo_Spells = require('res/Geo_Spells')
 JSE_Neck_Ranks = require('res/JSE_Neck_Ranks')	-- (v1.10) rank bonuses Windower can't read
 Limbus_Ranks = require('res/Limbus_Ranks')		-- (v1.11) Murky / Alabaster gear, exact per rank
+Limbus_Armor_Ranks = require('res/Limbus_Armor_Ranks')	-- (v1.20) Limbus racial armor and weapons
 Ranked_Gear = {}
 for id, entry in pairs(JSE_Neck_Ranks) do Ranked_Gear[id] = entry end
 for id, entry in pairs(Limbus_Ranks) do Ranked_Gear[id] = entry end
+for id, entry in pairs(Limbus_Armor_Ranks) do Ranked_Gear[id] = entry end
 
 res = require('resources')
 skills_from_resources = res.skills

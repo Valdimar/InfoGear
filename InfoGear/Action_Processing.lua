@@ -234,9 +234,13 @@ function on_action(action)
 				end
 				if action.param == 347 then -- ecliptic atrition
 					for index, m_table in pairs(member_table) do
-						if m_table.mob.pet_index and windower.ffxi.get_mob_by_index(m_table.mob.pet_index).name == 'Luopan' and m_table.id == action.actor_id then
-							if member_table[index].geo.boost ~= 2 then
-								member_table[index].geo = {id = member_table[index].geo.id, caster = member_table[index].geo.caster, boost = (member_table[index].geo.boost + 0.25) }
+						local pet = m_table.mob and m_table.mob.pet_index and windower.ffxi.get_mob_by_index(m_table.mob.pet_index)
+						local geo = m_table.geo
+						-- geo can be {} (bubble cast before InfoGear saw it, or party list rebuilt): nothing to boost then
+						if pet and pet.name == 'Luopan' and m_table.id == action.actor_id and geo and geo.id then
+							local b = geo.boost or 1
+							if b ~= 2 then
+								member_table[index].geo = {id = geo.id, caster = geo.caster, boost = b + 0.25}
 							end
 						end
 					end

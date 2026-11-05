@@ -260,3 +260,50 @@ except for the intentional changes below. A deliberately injected bug is detecte
 * Tested outside the game: 15 typical Ambuscade capes (augment text built exactly as Windower's extdata does), before
   and after in separate runs; all 711 standard augments; every item description (23 values changed, all of them the
   Evasion / Magic Eva. fixes above).
+
+## v1.19 – README images
+* The README's opening images (the old GearInfo logo and a screenshot of the old bracket-tile display, both on Imgur)
+  are replaced with `docs/banner.png` (a new InfoGear wordmark in the card style) and `docs/display.png` (the current
+  display, rendered from the addon's own layout code at 2x). The other README images (`layout-cards`, `sizes`,
+  `columns`, `layout-cards-extra`) already show the current layout.
+
+## v1.20 – Limbus racial armor and weapon ranks
+* New `res/Limbus_Armor_Ranks.lua`, generated from the R30 values per slot (sheet of the BG-Wiki pages): 155 items,
+  i.e. the 5 racial sets x 5 slots x NQ / HQ1 / HQ2 (Justice / Magnificent / Duty, Hope / Perfection / Revelation,
+  Trust / Prestige / Sworn, Bravery / Intrepid / Indomitable, Mercy / Grace / Clemency) and the Limbus weapons
+  (Skia, Arctus, Auge, Telognophos, Daduchos, Telopanos). Shown stats: Accuracy, Ranged / Magic Accuracy, Attack,
+  Ranged Attack, DA, TA, QA, Store TP, PDL, MAB, Phalanx (received), Enmity, HP, VIT. Not shown: Damage, Magic
+  Damage, Blood Pact damage, pet stats.
+* Growth per rank: exact BG-Wiki tables for Sworn Crown, Duty Crown and Clemency Somen (used for their whole slot,
+  NQ to HQ2). Elsewhere: [1] and [4] +1 per rank from R1; [2] from R15 and [3] from R20 (Bravery: R16 / R26),
+  +1 every 2 ranks but at most the R30 value minus 1 per 3 ranks still to go, which reproduces the four known tables
+  except 2 values (1 off); big weapon numbers grow in proportion. R30 is exact for every piece.
+* Uses the same rank reading as the JSE necks and Murky / Alabaster gear (`Ranked_Gear`).
+* Tested outside the game: Sworn Crown R30 + Duty Cyclas R20 through the real check_equipped (TA 7, Store TP 3,
+  Phalanx 4); spot checks against the pasted tables (Revelation Platemail DA +1 at R15, +3 at R20).
+
+## v1.21 – Limbus weapon ranks
+* Limbus weapons now grow like BG-Wiki's Telopanos Grip table: every group starts at R1 (not R15 / R20 like the
+  armor); stats worth 30 at R30 go +1 per rank; bigger ones follow the grip's HP curve (+4 / +3 / +2 per rank for
+  every 100 at R1-15 / R16-25 / R26-30), e.g. HP+300 = +12 / +9 / +6 per rank. The grips (Arctus to Telopanos) match
+  the wiki at all 30 ranks; R30 stays exact for every weapon.
+
+## v1.22 – one growth rule for all Limbus armor
+* All Limbus armor sets, slots and tiers rank up the same way: a stat's growth depends only on its R30 value. So the
+  three per-item tables (Sworn Crown, Duty Crown, Clemency Somen) are gone and every piece uses the one rule. Checked
+  against six BG-Wiki tables (Sworn Crown, Sworn Sabatons, Prestige Platemail, Duty Crown, Clemency Somen, Revelation
+  Platemail): 139 of 141 values match; the 2 others (Clemency Somen Enmity R29, Sworn Crown Phalanx R23) contradict
+  other tables with the same R30 value, so they look like wiki typos.
+
+## v1.23 – new banner
+
+* `docs/banner.png` replaced: outlined 2x2 card icon beside the InfoGear wordmark, a six-colour rule (the card caption colours) under both, and the tagline "gear, buffs & caps at a glance". No code changes.
+
+## v1.24 – Ecliptic Attrition crash fix
+
+* Fixed `Action_Processing.lua:239: attempt to perform arithmetic on field 'boost' (a nil value)`: using Ecliptic Attrition when InfoGear didn't know the Luopan's bubble (cast before the addon loaded, or the party list had been rebuilt) crashed. Now it's skipped in that case, and a missing boost counts as 1.
+* Also guarded: a Luopan that has just despawned no longer errors in the GEO bubble check, and Indi/Geo potency uses x1 when the boost is unknown.
+
+## v1.25 – README section headings
+
+* New heading images in the banner's style (outlined card icon, six-colour rule, the command in lavender) above the Cards, Sizes, Columns and Extra Cards pictures: `docs/heading-cards.png`, `heading-sizes.png`, `heading-columns.png`, `heading-extra-cards.png`. No code changes.
