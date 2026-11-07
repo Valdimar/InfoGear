@@ -323,3 +323,10 @@ except for the intentional changes below. A deliberately injected bug is detecte
 * **Snapshots:** `//ig snap <name>`, `//ig diff <name>`, `//ig snaps`, `//ig snap del <name>` (`data/<name>_snaps.lua`).
 * **New cards:** SIRD (`sird`, tank group, red over 102) and Conserve MP (`conserve`, magic group). The gear parser now reads "Spell interruption rate down" and "Conserve MP"; saved gear is read again once (parser version 8).
 * New file `Extras.lua` holds all of the above.
+
+## v1.28 – cards sorted into sections
+
+* All cards (main and extra) are in named groups inside sections, in a fixed order: attack speed (haste, DW, MA), defence (DT..., Eva / Def / M.Eva / MDB, Phalanx / Enmity / SIRD), melee (TP, Acc / Att, DA / TA / QA, Crit, WSD / PDL, SB), ranged, magic (F.Cast / Cons.MP, nuking, Cure), recovery (HP / MP, Regen / Refresh / Regain), pet. Speed, TH and UGS take the lowest free space.
+* Each section has one caption colour (`card_section_colors` in Layouts.lua).
+* Packing: a section continues where the last one ended. It only fills that row out of order when that saves a row, so the default display stays the same size as before (228 x 204 px for 18 cards at 4 across).
+* README pictures redrawn with the new order.

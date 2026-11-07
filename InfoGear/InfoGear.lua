@@ -1,6 +1,6 @@
 _addon.name = 'InfoGear'
 _addon.author = 'Valdimar @ Phoenix'	-- based on GearInfo by Sebyg666
-_addon.version = '1.27'
+_addon.version = '1.28'
 
 -- Raise this whenever the gear parser learns new stats: each character's saved gear is then read again once.
 GEAR_PARSER_VERSION = 8	-- 8: v1.27 SIRD, Conserve MP; 3: v1.11 Unity table; 4: v1.12 pet damage taken; 5: v1.15 pet absorb fix; 6: v1.17 pet regen; 7: v1.18 cape augments
