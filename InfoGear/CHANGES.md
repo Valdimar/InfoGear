@@ -330,3 +330,26 @@ except for the intentional changes below. A deliberately injected bug is detecte
 * Each section has one caption colour (`card_section_colors` in Layouts.lua).
 * Packing: a section continues where the last one ended. It only fills that row out of order when that saves a row, so the default display stays the same size as before (228 x 204 px for 18 cards at 4 across).
 * README pictures redrawn with the new order.
+
+## v1.29 – job traits, real food %, thresholds, lock, cutscenes, Hit %, weapon swaps, luopan DT
+
+* **Job traits, merits and job points** on the extra cards (DA, TA, Crit, Crit.D, SB, WSD, F.Cast, MAB, Cons.MP, M.Acc, M.Eva, MDB, TH, SIRD): `Card_Traits` in Job_Traits.lua, listed in the hover box. Checked: THF TA 19, RDM Fast Cast 38, MNK SB 35, DNC SB 32 at max job points (BG-Wiki).
+* **Food percentages** worked out from your stat before food (Acc / Att / R.Acc / R.Att / Eva / Def from the cards, HP / MP from the game), capped at the food's max; the cap is used when the total isn't known.
+* **Sanction / Sigil** count only under their HP / MP thresholds (`below_hpp` / `below_mpp` in res/Field_Buffs.lua).
+* **`//ig regen <n>` / `//ig refresh <n>`**: per-tick bonus added to Regen / Refresh spells cast on you.
+* **Ionis**: haste and max HP / MP entries added (0 until the values are known).
+* **`//ig lock`**: the display can't be dragged.
+* **Cutscenes**: the display hides while you're in one (`//ig cutscene` toggles).
+* **Hit % card** (`hit`, melee group): BG-Wiki hit rate against your target; evasion set with `//ig eva <n>` per monster name, level from /check (`data/<name>_mobs.lua`).
+* **Weapon swaps**: update on the equip packet (0x050) and recalculate skill in gear at once.
+* **Pet DT**: the luopan's innate -50% is added on GEO (BG-Wiki), like the wyvern's -40% on DRG.
+
+## v1.30 – commands cleaned up
+
+* All commands are in one list in the new `Commands.lua` (names, usage, help, code); `//ig help` is made from it: `//ig help` lists topics, `//ig help <topic|command>` the details.
+* Toggles take on / off (`//ig lock on`, `//ig show da off`, `//ig ugs off`, `//ig dnc on`, `//ig debug off`...); number commands show the current value when typed without one (`//ig stp`, `//ig rank`, `//ig regen`, `//ig brd`...).
+* `//ig hide <card|group>` turns one off (`//ig hide` alone still hides everything); `//ig show all` / `//ig hide all`. A card's name alone toggles it (`//ig da`).
+* `//ig cards` lists the main cards too. New: `//ig settings` (everything in one place), `//ig manual [clear]` (the numbers added by hand), `//ig wstp save|clear`, `//ig cor msgs [on|off]`.
+* Unknown commands say "Did you mean ...?" instead of printing the whole help.
+* Fixed: `//ig brd`, `cor`, `geo`, `save`, `delete` with nothing after them crashed; every bard added with `brd add` shared one settings table (changing one changed all); `geo add` saved the bonus as text; help showed `//gs stp` instead of `//ig stp`; typos ("maunal", "Duel Wield"); the leftover `//ig test` command is gone.
+* Every chat message now reads `[InfoGear] ...`.

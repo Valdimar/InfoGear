@@ -1,6 +1,22 @@
 local dragged
 function is_dragging() return dragged ~= nil end	-- (v1.27) the hover box stays hidden while dragging
 
+-- (v1.29) hides / shows the whole display (panel, cards, their text) without removing anything: used in cutscenes
+display_hidden = false
+function set_display_hidden(hidden)
+	if hidden == display_hidden then return end
+	display_hidden = hidden
+	dragged = nil
+	if sections.background then windower.prim.set_visibility(sections.background.name, not hidden) end
+	for _, b in pairs(sections.block or {}) do
+		windower.prim.set_visibility(b.name, not hidden)
+		if b.text then
+			windower.text.set_visibility(b.text[1].name, not hidden)
+			windower.text.set_visibility(b.text[2].name, not hidden)
+		end
+	end
+end
+
 math.randomseed(os.clock())
 
 imageColors = L{'red','blue','green','dark-blue','grey','light-green','orange','pink','purple','yellow'}
@@ -125,8 +141,12 @@ ImageBlock = {
 		windower.prim.set_texture(o.name, o.image_path)
 		windower.prim.set_fit_to_texture(o.name, o.fit)
 		windower.prim.set_size(o.name, o.width, o.height)
-		windower.prim.set_visibility(o.name, o.visible)
+		windower.prim.set_visibility(o.name, o.visible and not display_hidden)
 		windower.prim.set_position(o.name, o.x, o.y)
+		if display_hidden and o.text then	-- (v1.29) made while hidden (cutscene): stays hidden until shown again
+			windower.text.set_visibility(o.text[1].name, false)
+			windower.text.set_visibility(o.text[2].name, false)
+		end
 		
 		return o
 	end,
@@ -327,6 +347,7 @@ windower.register_event('mouse', function(type, x, y, delta, blocked)
 
     -- Mouse left click
     elseif type == 1 then
+		if settings.player.locked or display_hidden then return false end	-- (v1.29) //ig lock / hidden in a cutscene
 		if sections.background.draggable and sections.background:hover(x, y) then
 			local pos_x, pos_y =sections.background:position()
 			dragged = {image = sections.background, x = x - pos_x, y = y - pos_y}

@@ -193,7 +193,11 @@ local function update_acc_widgets()
 		remove_blocks(12, 13, 19)
 		return
 	end
-	main_sub_range_widgets(get_player_acc(Gear_info), 12, 13, 19, 'yellow', 'Acc.', 'R.Acc.')
+	local t = get_player_acc(Gear_info)
+	note_total('Accuracy', t.main)	-- (v1.29) for percent food
+	note_total('Ranged Accuracy', (t.range > 0) and t.range or t.ammo)
+	last_main_acc = t.main	-- (v1.29) for the Hit % card
+	main_sub_range_widgets(t, 12, 13, 19, 'yellow', 'Acc.', 'R.Acc.')
 end
 
 local function update_att_widgets()
@@ -201,7 +205,10 @@ local function update_att_widgets()
 		remove_blocks(14, 15, 21)
 		return
 	end
-	main_sub_range_widgets(get_player_att(Gear_info), 14, 15, 21, 'yellow', 'Att.', 'R.Att.')
+	local t = get_player_att(Gear_info)
+	note_total('Attack', t.main)	-- (v1.29) for percent food
+	note_total('Ranged Attack', (t.range > 0) and t.range or t.ammo)
+	main_sub_range_widgets(t, 14, 15, 21, 'yellow', 'Att.', 'R.Att.')
 end
 
 -- block 22
@@ -211,7 +218,9 @@ local function update_evasion_widget()
 		return
 	end
 	block(22, 'yellow', 'Eva.', '')
-	set_value(22, tostring(get_player_evasion(Gear_info)))
+	local eva = get_player_evasion(Gear_info)
+	note_total('Evasion', eva)	-- (v1.29) for percent food
+	set_value(22, tostring(eva))
 end
 
 -- block 23
@@ -221,7 +230,9 @@ local function update_defence_widget()
 		return
 	end
 	block(23, 'yellow', 'Def.', '')
-	set_value(23, tostring(get_player_defence(Gear_info)))
+	local def = get_player_defence(Gear_info)
+	note_total('DEF', def)	-- (v1.29) for percent food
+	set_value(23, tostring(def))
 end
 
 -- blocks 24, 25
@@ -280,33 +291,35 @@ end
 -------------------------------------------------------------------------------------------------------------
 local function G(k) return (Gear_info and Gear_info[k]) or 0 end
 local function B(k) return (Buffs_inform and Buffs_inform[k]) or 0 end
+-- (v1.29) job traits, merits and job point gifts for a card (Job_Traits.lua)
+local function T(key) return (card_trait_total and card_trait_total(key)) or 0 end
 
 extra_card_values = {
 	-- caps from BG-Wiki: Fast Cast 80%, Magic Burst Bonus (I) 40% from gear, Cure Potency 50%, Cure Potency II 30%,
 	-- Subtle Blow 50% each and 75% together, Snapshot 70% from all sources
-	fc      = function() local v = G('Fast Cast') + B('Fast Cast');                   return v, v > 80 end,
-	macc    = function() return G('Magic Accuracy') + B('Magic Accuracy') end,
-	mab     = function() return G('Magic Atk. Bonus') + B('Magic Atk. Bonus') end,
+	fc      = function() local v = G('Fast Cast') + B('Fast Cast') + T('fc');                   return v, v > 80 end,
+	macc    = function() return G('Magic Accuracy') + B('Magic Accuracy') + T('macc') end,
+	mab     = function() return G('Magic Atk. Bonus') + B('Magic Atk. Bonus') + T('mab') end,
 	mbb     = function() local v = G('Magic Burst Bonus');                            return v, v > 40 end,
 	mbb2    = function() return G('Magic Burst Bonus II') end,
 	cure    = function() local v = G('Cure Potency');                                 return v, v > 50 end,
 	cure2   = function() local v = G('Cure Potency II');                              return v, v > 30 end,
-	da      = function() return G('Double Attack') + B('Double Attack') end,
-	ta      = function() return G('Triple Attack') + B('Tripple Attack') + B('Triple Attack') end,
+	da      = function() return G('Double Attack') + B('Double Attack') + T('da') end,
+	ta      = function() return G('Triple Attack') + B('Tripple Attack') + B('Triple Attack') + T('ta') end,
 	qa      = function() return G('Quadruple Attack') + B('Quadruple Attack') end,
-	crit    = function() return G('Critical hit rate') + B('Critical hit rate') end,
-	critdmg = function() return G('Critical hit damage') + B('Critical hit damage') end,
-	sb      = function() local v = G('Subtle Blow') + B('Subtle Blow');               return v, v > 50 end,
+	crit    = function() return G('Critical hit rate') + B('Critical hit rate') + T('crit') end,
+	critdmg = function() return G('Critical hit damage') + B('Critical hit damage') + T('critdmg') end,
+	sb      = function() local v = G('Subtle Blow') + B('Subtle Blow') + T('sb');               return v, v > 50 end,
 	sb2     = function()
-		local one, two = G('Subtle Blow') + B('Subtle Blow'), G('Subtle Blow II')
+		local one, two = G('Subtle Blow') + B('Subtle Blow') + T('sb'), G('Subtle Blow II')
 		return two, two > 50 or math.min(one, 50) + two > 75	-- II alone over 50, or both together over 75
 	end,
-	wsd     = function() return G('Weapon Skill Damage') end,
+	wsd     = function() return G('Weapon Skill Damage') + T('wsd') end,
 	pdl     = function() return G('Physical Damage Limit') end,
 	snap    = function() local v = G('Snapshot');                                     return v, v > 70 end,
 	rapid   = function() return G('Rapid Shot') end,
-	meva    = function() return G('Magic Evasion') + B('Magic Evasion') end,
-	mdb     = function() return G('Magic Def. Bonus') + B('Magic Def. Bonus') end,
+	meva    = function() return G('Magic Evasion') + B('Magic Evasion') + T('meva') end,
+	mdb     = function() return G('Magic Def. Bonus') + B('Magic Def. Bonus') + T('mdb') end,
 	phalanx = function() return G('Phalanx') end,
 	enmity  = function() return G('Enmity') end,
 	hp      = function() return G('HP') + B('HP') end,
@@ -314,10 +327,12 @@ extra_card_values = {
 	regen   = function() return G('Regen') + B('Regen') end,	-- (v1.26) gear + buffs
 	refresh = function() return G('Refresh') + B('Refresh') end,	-- (v1.26) gear + buffs
 	regain  = function() return G('Regain') + B('Regain') end,	-- (v1.26) gear + buffs
-	th      = function() return G('Treasure Hunter') end,
+	th      = function() return G('Treasure Hunter') + T('th') end,
 	-- (v1.27) Spell interruption rate down: 102% from all sources together (incl. 10% merits) stops all interruption
-	sird    = function() local v = G('Spell Interruption Rate Down');             return v, v > 102 end,
-	conserve = function() return G('Conserve MP') end,
+	sird    = function() local v = G('Spell Interruption Rate Down') + T('sird');             return v, v > 102 end,
+	conserve = function() return G('Conserve MP') + T('conserve') end,
+	-- (v1.29) hit rate against your target (Extras.lua): "--" until //ig eva is set for it; red under 80%
+	hit     = function() local v, red = hit_rate(); return v, red end,
 	-- (v1.12) your pet's damage taken from your gear, all pet types together ("Pet:", "Wyvern:", "Avatar:",
 	-- "Automaton:", "Luopan:"), shown as physical / magic. Pets cap like players: 50% per type from gear (BG-Wiki).
 	-- (v1.16) On main DRG the wyvern's innate -40% damage taken is added on top of the (capped) gear part, up to the
@@ -342,9 +357,21 @@ extra_card_values = {
 -- (v1.16) the wyvern's own damage taken reduction, counted on main DRG; overall cap for pets (and players)
 wyvern_innate_dt = 40
 pet_dt_overall_cap = 87.5
-function pet_innate_dt()
+luopan_innate_dt = 50	-- (v1.29) BG-Wiki, Luopan: innate damage taken -50%
+-- (v1.29) the innate damage taken of your pet: the wyvern on DRG, the luopan on GEO (when one is out, or on main GEO).
+-- Player avatars, automatons and jug pets have none listed on BG-Wiki.
+function pet_innate_name()
 	local main = player and player.main_job and tostring(player.main_job):upper()
-	if main == 'DRG' then return wyvern_innate_dt end
+	local pet = windower.ffxi.get_mob_by_target and windower.ffxi.get_mob_by_target('pet')
+	if pet and pet.name == 'Luopan' then return 'luopan' end
+	if main == 'DRG' then return 'wyvern' end
+	if main == 'GEO' then return 'luopan' end
+	return nil
+end
+function pet_innate_dt()
+	local which = pet_innate_name()
+	if which == 'wyvern' then return wyvern_innate_dt end
+	if which == 'luopan' then return luopan_innate_dt end
 	return 0
 end
 
@@ -400,6 +427,7 @@ function update()
 	
 	-- 1. numbers that other code (and Gearswap) depend on, whatever is on screen
 	local current_equip = check_equipped()
+	weapon_check(current_equip)	-- (v1.29) weapons changed: skill-in-gear worked out again now (Extras.lua)
 	Gear_info = build_combined_stats(get_equip_stats(current_equip))
 	add_extra_sources(Gear_info)	-- (v1.27) food, Ionis / Sanction / Sigil (Extras.lua)
 	job_presets_check()	-- (v1.27) main job changed: switch to that job's cards

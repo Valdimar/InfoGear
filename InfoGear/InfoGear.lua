@@ -1,6 +1,6 @@
 _addon.name = 'InfoGear'
 _addon.author = 'Valdimar @ Phoenix'	-- based on GearInfo by Sebyg666
-_addon.version = '1.28'
+_addon.version = '1.30'
 
 -- Raise this whenever the gear parser learns new stats: each character's saved gear is then read again once.
 GEAR_PARSER_VERSION = 8	-- 8: v1.27 SIRD, Conserve MP; 3: v1.11 Unity table; 4: v1.12 pet damage taken; 5: v1.15 pet absorb fix; 6: v1.17 pet regen; 7: v1.18 cape augments
@@ -11,6 +11,12 @@ require('tables')
 require('lists')
 require('strings')
 require('logger')
+-- (v1.30) every message InfoGear writes looks the same: "[InfoGear] text" (the logger's log() is replaced)
+function log(...)
+	local parts = {}
+	for i = 1, select('#', ...) do parts[#parts + 1] = tostring((select(i, ...))) end
+	windower.add_to_chat(207, '[' .. _addon.name .. '] ' .. table.concat(parts, ' '))
+end
 require('pack')
 
 DW_Gear = require('res/DW_Gear')
@@ -54,6 +60,7 @@ require 'Packet_parsing'
 require 'Layouts'
 require 'Image_processing'
 require 'Extras'	-- (v1.27) per-job cards, food, Ionis / Sanction / Sigil, hover breakdown, snapshots
+require 'Commands'	-- (v1.30) every //ig command and the help, in one list
 
 -- Chat lines when the addon loads. The profile line needs a character, so it is printed from options_load() once
 -- that character's settings file (data/<name>_settings.xml) is loaded; logging in reloads the addon, so every
@@ -163,386 +170,7 @@ function options_load()
 	
 end
 
-local function infogear_command(command, ...)
-	local args = {...}
-    command = command and command:lower()
-    if command then
-        if command:lower() == 'parse' then
-			log('Parsing all inventories to file')
-			parse_inventory()
-		elseif command:lower() == 'rank' then
-			--table.vprint(args)
-			if type(tonumber(args[1])) == 'number'  then
-				settings.player.rank = tonumber(args[1])
-				log('Changed \'Unity Rank\' to '..tonumber(args[1])..'. Don\'t forget to \"//ig parse\" to apply new values to your gear.')
-				settings:save('all')
-			else
-				log('Your current \'Unity Rank\' setting is: '..settings.player.rank..'.')
-			end
-			settings:save('all')
-		elseif command:lower() == 'stp' and type(tonumber(args[1])) == 'number' then
-			manual_stp = tonumber(args[1])
-			log('Set maunal Store TP to ' .. tostring(manual_stp))
-		elseif command:lower() == 'dw' and type(tonumber(args[1])) == 'number' then
-			manual_dw = tonumber(args[1])
-			log('Set maunal Dual Wield to ' .. tostring(manual_dw))
-		elseif command:lower() == 'ghaste' and type(tonumber(args[1])) == 'number' then
-			manual_ghaste = tonumber(args[1])
-			log('Set maunal Gear Haste to ' .. tostring(manual_ghaste))
-		elseif command:lower() == 'mhaste' and type(tonumber(args[1])) == 'number' then
-			manual_mhaste = tonumber(args[1])
-			log('Set maunal Magic Haste to ' .. tostring(manual_mhaste))
-		elseif command:lower() == 'jahaste' and type(tonumber(args[1])) == 'number' then
-			manual_jahaste = tonumber(args[1])
-			log('Set maunal Job Ability Haste to ' .. tostring(manual_jahaste))
-		elseif command:lower() == 'dwn' and type(tonumber(args[1])) == 'number' then	
-			manual_dw_needed = tonumber(args[1])
-			log('Set maunal DW needed to ' .. tostring(manual_dw_needed))
-		elseif command:lower() == 'r' or command:lower() == 'reload' then
-			
-			local new_item = member_table
-			local f = io.open(windower.addon_path..'data/'..player.name..'_temp_party.lua','w')
-			f:write('return ' .. T(new_item):tovstring())
-			f:close()
-			
-			local new_item = _ExtraData.player.buff_details
-			local f = io.open(windower.addon_path..'data/'..player.name..'_temp_buffs.lua','w')
-			f:write('return ' .. T(new_item):tovstring())
-			f:close()
-			notice('Buffs and party saved to temp file. Reloading IG.')
-
-			windower.send_command('lua r infogear;')
-		elseif command:lower() == 'save' or command:lower() == 's' then
-			if args[1]:lower() == 'wstp' then
-				WSTP = get_tp_per_hit(player.equipment).tp_per_hit_melee
-			else
-				log('Misstype: use //ig save wstp')
-			end
-		elseif command:lower() == 'delete' or command:lower() == 'd' then
-			if args[1]:lower() == 'wstp' then
-				WSTP = 0
-			else
-				log('Misstype: use //ig delete wstp')
-			end	
-		elseif command:lower() == 'hide' then
-			settings.player.show_total_haste = false
-			settings.player.show_tp_Stuff = false
-			settings.player.show_acc_Stuff = false
-			settings.player.show_dt_Stuff = false
-			settings.player.show_att_Stuff = false
-			settings.player.show_Evasion = false
-			settings.player.show_Defence = false
-			settings.player.show_STP = false
-			settings.player.show_speed = false
-			settings.player.show_DW_Stuff = false
-			settings.player.show_MA_Stuff = false
-			for _, c in ipairs(extra_cards) do settings.player.cards[c.key] = false end
-			log('All display settings set to false to hide display.')
-			settings:save('all')
-		elseif command:lower() == 'update' then
-			update_gs(DW, (DW_needed + manual_dw_needed), get_total_haste(), nil, nil, true)
-		elseif command:lower() == 'updategs' or command:lower() == 'ugs' then
-			if args[1] == nil then
-				if settings.player.update_gs == false then
-					settings.player.update_gs = true
-				elseif settings.player.update_gs then
-					settings.player.update_gs = false
-				end
-			elseif args[1]:lower() == 'true' then
-				settings.player.update_gs = true
-			elseif args[1]:lower() == 'false' then
-				settings.player.update_gs = false
-			end
-			log('Auto update Gearswap = '..tostring(settings.player.update_gs))
-			settings:save('all')
-		elseif command:lower() == 'brd' then
-			if type(tonumber(args[1])) == 'number' then
-				manual_bard_duration_bonus = tonumber(args[1])
-				log('Set Brd song+ bonus to ' .. tostring(manual_bard_duration_bonus) .. '.')
-			elseif args[1]:lower() == 'add' and type(tostring(args[2])) == 'string' and type(tonumber(args[3])) == 'number' then
-				settings.Bards[args[2]:lower()] = default_bard_settings
-				settings.Bards[args[2]:lower()]['song_bonus']['all_songs'] = tonumber(args[3])
-				settings:save('all')
-				log('Added ' .. tostring(args[2]:lower()) .. ' as a known bard with +'.. tonumber(args[3]) .. ' to all songs.')
-				notice('For advanced users: You may go into the settings file for your character and edit the bards in a more detailed manner.')
-			elseif args[1]:lower() == 'delete' and type(tostring(args[2])) == 'string' then
-				settings.Bards[tostring(args[2]):lower()] = nil
-				settings:save('all')
-				log('Removed ' .. tostring(args[2]:lower()) .. ' as a known bard!')
-			end
-		elseif command:lower() == 'cor' then
-			if type(tonumber(args[1])) == 'number' then
-				manual_COR_bonus = tonumber(args[1])
-				log('Set Phantom Roll bonus to ' .. tostring(manual_COR_bonus) .. '.')
-			elseif args[1]:lower() == 'add' and type(tostring(args[2])) == 'string' and type(tonumber(args[3])) == 'number' then
-				settings.Cors[args[2]:lower()] = tonumber(args[3])
-				settings:save('all')
-				log('Added ' .. tostring(args[2]:lower()) .. ' as a known COR with +' .. tonumber(args[3]) .. ' Phantom Roll !')
-			elseif args[1]:lower() == 'delete' and type(tostring(args[2])) == 'string' then
-				settings.Cors[tostring(args[2]):lower()] = nil
-				settings:save('all')
-				log('Removed ' .. tostring(args[2]:lower()) .. ' as a known COR!')
-			end
-		elseif command:lower() == 'geo' then
-			if type(tonumber(args[1])) == 'number' then
-				manual_GEO_bonus = tonumber(args[1])
-				log('Set Geomancy bonus to ' .. tostring(manual_GEO_bonus) .. '.')
-			elseif args[1]:lower() == 'add' and type(tostring(args[2])) == 'string' and type(tonumber(args[3])) == 'number' then
-				settings.Geos[args[2]:lower()] = args[3]
-				settings:save('all')
-				log('Added ' .. tostring(args[2]:lower()) .. ' as a known GEO with +' .. tonumber(args[3]) .. ' Geomancy!')
-			elseif args[1]:lower() == 'delete' and type(tostring(args[2])) == 'string' then
-				settings.Geos[tostring(args[2]):lower()] = nil
-				settings:save('all')
-				log('Removed ' .. tostring(args[2]:lower()) .. ' as a known GEO!')
-			end
-		elseif command:lower() == 'dnc' then
-			if dancer_main then
-				dancer_main = false
-			else
-				dancer_main = true
-			end
-			log('toggled DNC buff from main job to -> ' .. tostring(dancer_main) .. '.')
-		elseif command:lower() == 'show' then
-			
-			if not args[1] then
-				windower.send_command('ig cards')
-				return
-			end
-			if extra_card_toggle(args[1]:lower()) then
-				-- (v1.7) handled: an extra card or a group of them
-			elseif args[1]:lower() == 'haste' then
-				if settings.player.show_total_haste == false then
-					settings.player.show_total_haste = true
-				elseif settings.player.show_total_haste then
-					settings.player.show_total_haste = false
-				end
-				log('Show Haste = '..tostring(settings.player.show_total_haste))
-			elseif args[1]:lower() == 'eva' then
-				if settings.player.show_Evasion == false then
-					settings.player.show_Evasion = true
-				elseif settings.player.show_Evasion then
-					settings.player.show_Evasion = false
-				end
-				log('Show Evasion calculations = '..tostring(settings.player.show_Evasion))	
-			elseif args[1]:lower() == 'def' then
-				if settings.player.show_Defence == false then
-					settings.player.show_Defence = true
-				elseif settings.player.show_Defence then
-					settings.player.show_Defence = false
-				end
-				log('Show Defence calculations = '..tostring(settings.player.show_Defence))		
-			elseif args[1]:lower() == 'att' then
-				if settings.player.show_att_Stuff == false then
-					settings.player.show_att_Stuff = true
-				elseif settings.player.show_att_Stuff then
-					settings.player.show_att_Stuff = false
-				end
-				log('Show Attack calculations = '..tostring(settings.player.show_att_Stuff))	
-			elseif args[1]:lower() == 'tp' then
-				if settings.player.show_tp_Stuff == false then
-					settings.player.show_tp_Stuff = true
-				elseif settings.player.show_tp_Stuff then
-					settings.player.show_tp_Stuff = false
-				end
-				log('Show Tp calculations = '..tostring(settings.player.show_tp_Stuff))
-			elseif args[1]:lower() == 'stp' then
-				if settings.player.show_STP== false then
-					settings.player.show_STP = true
-				elseif settings.player.show_STP then
-					settings.player.show_STP = false
-				end
-				log('Show Store TP = '..tostring(settings.player.show_STP))
-			elseif args[1]:lower() == 'speed' then
-				settings.player.show_speed = not (settings.player.show_speed == true)
-				log('Show movement speed = '..tostring(settings.player.show_speed))
-			elseif args[1]:lower() == 'dw' then
-				if settings.player.show_DW_Stuff == false then
-					settings.player.show_DW_Stuff = true
-				elseif settings.player.show_DW_Stuff then
-					settings.player.show_DW_Stuff = false
-				end
-				log('Show Duel Wield calculations = '..tostring(settings.player.show_DW_Stuff))
-			elseif args[1]:lower() == 'ma' then
-				if settings.player.show_MA_Stuff == false then
-					settings.player.show_MA_Stuff = true
-				elseif settings.player.show_MA_Stuff then
-					settings.player.show_MA_Stuff = false
-				end
-				log('Show Martial Arts calculations = '..tostring(settings.player.show_MA_Stuff))
-			elseif args[1]:lower() == 'acc' then
-				if settings.player.show_acc_Stuff == false then
-					settings.player.show_acc_Stuff = true
-				elseif settings.player.show_acc_Stuff then
-					settings.player.show_acc_Stuff = false
-				end
-				-- log('Currently dissabled, in testing.')
-				log('Show Total Acc = '..tostring(settings.player.show_acc_Stuff))
-			elseif args[1]:lower() == 'dt' then
-				if settings.player.show_dt_Stuff == false then
-					settings.player.show_dt_Stuff = true
-				elseif settings.player.show_dt_Stuff then
-					settings.player.show_dt_Stuff = false
-				end
-				-- log('Currently dissabled, in testing.')
-				log('Show Defence = '..tostring(settings.player.show_dt_Stuff))
-			elseif args[1]:lower() == 'cor' then
-				if settings.player.show_COR_messages == false then
-					settings.player.show_COR_messages = true
-				elseif settings.player.show_COR_messages then
-					settings.player.show_COR_messages = false
-				end
-				log('Cor Chat log messages set to '..tostring(settings.player.show_COR_messages))
-			elseif args[1]:lower() == 'all' then
-				settings.player.show_total_haste = true
-				settings.player.show_tp_Stuff = true
-				settings.player.show_acc_Stuff = true
-				settings.player.show_dt_Stuff = true
-				settings.player.show_att_Stuff = true
-				settings.player.show_Evasion = true
-				settings.player.show_Defence = true
-				settings.player.show_STP = true
-				settings.player.show_speed = true
-				settings.player.show_DW_Stuff = true
-				settings.player.show_MA_Stuff = true
-				for _, c in ipairs(extra_cards) do settings.player.cards[c.key] = true end
-				log('All display settings set to true to shall all the display.')
-			end
-			settings:save('all')
-		elseif command:lower() == 'test' then
-			table.vprint(player['merits']['aggressive_aim'])
-			-- for skill_name, value in pairs(player_base_skills) do
-				-- if skill_name:contains('eva') then
-					-- print(skill_name, value)
-				-- end
-			-- end
-			-- if player_base_skills['evasion'] then print(player_base_skills['evasion']) end
-			-- local current_equip = check_equipped()
-			-- local Gear_info = get_equip_stats(current_equip)
-			-- print(Gear_info['Evasion skill'])
-			--check_equipped()
-			--settings.Cors['ewellina'] = nil
-			-- table.vprint(_ExtraData.player.buff_details)
-			--table.vprint(windower.ffxi.get_mob_by_target('t'))
-			--table.vprint(member_table)
-			--table.vprint(player_base_skills)
-			-- local stat_table = get_equip_stats(check_equipped())
-			-- local player_Acc = get_player_acc(stat_table)
-			-- table.vprint(stat_table.range)
-			-- log(player_Acc.agi.. '  '..stat_table["Throwing skill"] .. '  '..stat_table['Ranged Accuracy'])
-			-- table.vprint( player_Acc )
-			-- log(player_base_skills['hand_to_hand'])
-			-- player_base_skills = player.skills
-			-- get_player_skill_in_gear(check_equipped())
-			--player.stats = get_packet_data_base_stats()
-			-- get_packet_data()
-			-- Total_acc = get_player_acc(check_equipped())
-			-- log(player.stats.DEX .. ' '.. Total_acc.dex .. ' '.. Total_acc.main.. ' '.. Total_acc.sub)
-			-- log(player.stats.AGI .. ' '.. Total_acc.agi .. ' '.. Total_acc.range.. ' '.. Total_acc.ammo)
-		elseif extras_command(command, args) then
-			-- (v1.27) food, sanction, sigil, hover, snap, diff, snaps, jobcards (Extras.lua)
-		elseif command == 'cards' then
-			extra_cards_list()
-		elseif command == 'why' then
-			why_command(args)
-		elseif command == 'size' then
-			size_command(args)
-		elseif command == 'columns' or command == 'cols' then
-			columns_command(args)
-		elseif command == 'scale' then
-			scale_command(args)
-		elseif command:lower() == 'debug' then
-			if debug_mode == false then
-				debug_mode = true
-			else
-				debug_mode = false
-			end
-			log('Toggled Debug Mode to '..tostring(debug_mode))
-		elseif command:lower() == 'help' then
-			
-			local chat_purple = string.char(0x1F, 200)
-			local chat_grey = string.char(0x1F, 160)
-			local chat_red = string.char(0x1F, 167)
-			local chat_white = string.char(0x1F, 001)
-			local chat_green = string.char(0x1F, 214)
-			local chat_yellow = string.char(0x1F, 036)
-			local chat_d_blue = string.char(0x1F, 207)
-			local chat_pink = string.char(0x1E, 5)
-			local chat_l_blue = string.char(0x1E, 6)
-			
-			windower.add_to_chat(6, ' ')
-			windower.add_to_chat(6, chat_white.. 	'                         --------------------------' )
-			windower.add_to_chat(6, chat_d_blue.. 	'                         Welcome to InfoGear help!' )
-			windower.add_to_chat(6, chat_white.. 	'                         --------------------------' )
-			windower.add_to_chat(6, ' ')
-			windower.add_to_chat(6, chat_d_blue.. 	'Commands available:' )
-			windower.add_to_chat(6, ' ')
-			windower.add_to_chat(6, chat_l_blue.. 	'\'\/\/ig parse\'' .. chat_white .. '  --  Will reload your inventory to file (eg. after changing unity rank).')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig rank\'' .. chat_white .. '   --  Shows current unity rank setting.')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig rank #\'' .. chat_white .. '  --  Change # to your unity rank, anything under 5 is set to 5.')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig stp #\'' .. chat_white .. '  --  Change # to + or - \'Store TP\' manually. eg. ' .. chat_yellow .. ' \/\/gs stp +10'.. chat_white ..' or ' .. chat_yellow  .. '\/\/gs stp 10')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig dw #\'' .. chat_white .. '  --  Change # to + or - \'Dual Wield\' manually. eg. ' .. chat_yellow .. ' \/\/gs dw +10'.. chat_white ..' or ' .. chat_yellow  .. '\/\/gs dw 10')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig ghaste #\'' .. chat_white .. '  --  Change # to + or - \'Haste\' manually. eg. ' .. chat_yellow .. ' \/\/gs ghaste +10'.. chat_white ..' or ' .. chat_yellow  .. '\/\/gs ghaste 10')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig mhaste #\'' .. chat_white .. '  --  Change # to + or - \'Haste\' manually. eg. ' .. chat_yellow .. ' \/\/gs mhaste +10'.. chat_white ..' or ' .. chat_yellow  .. '\/\/gs mhaste 10')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig jahaste #\'' .. chat_white .. '  --  Change # to + or - \'Haste\' manually. eg. ' .. chat_yellow .. ' \/\/gs jahaste +10'.. chat_white ..' or ' .. chat_yellow  .. '\/\/gs jahaste 10')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig dwn #\'' .. chat_white .. '  --  Change # to + or - \'DW needed\'. eg. ' .. chat_yellow .. ' \/\/gs dwn +10'.. chat_white ..' or ' .. chat_yellow  .. '\/\/gs dwn 10')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig save/s wstp\'' .. chat_white .. '  --  saves current tp/hit into new line.')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig delete/d wstp\'' .. chat_white .. '  --  deletes previously created line.')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig brd #\'' .. chat_white .. '  --  Change # to equal your parties BRD max March Bonus.')
-			windower.add_to_chat(6, chat_l_blue..	'          add \'name\' \'bonus\'' .. chat_white .. '  --  Save the bard with name and Bonus for future use.')
-			windower.add_to_chat(6, chat_yellow..	'eg. \/\/ig brd add bob 7' .. chat_white .. '  --  This will add bob to the list with +7 March Bonus.')
-			windower.add_to_chat(6, chat_l_blue..	'          delete \'name\'' .. chat_white .. '  --  Delete a bard from the list.')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig cor #\'' .. chat_white .. '  --  Change # to equal your parties COR "Phantom Roll +#" bonus.')
-			windower.add_to_chat(6, chat_l_blue..	'          add \'name\' \'bonus\'' .. chat_white .. '  --  Save the COR with name and Bonus for future use.')
-			windower.add_to_chat(6, chat_yellow..	'eg. \/\/ig cor add bob 3' .. chat_white .. '  --  This will add bob to the list with Phantom Roll +3. eg "Merirosvo Ring"')
-			windower.add_to_chat(6, chat_l_blue..	'          delete \'name\'' .. chat_white .. '  --  Delete a COR from the list.')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig geo #\'' .. chat_white .. '  --  Change # to equal your parties GEO "Geomancy +#" bonus.')
-			windower.add_to_chat(6, chat_l_blue..	'          add \'name\' \'bonus\'' .. chat_white .. '  --  Save the GEO with name and Bonus for future use.')
-			windower.add_to_chat(6, chat_yellow..	'eg. \/\/ig geo add bob 5' .. chat_white .. '  --  This will add bob to the list with Geomancy +5. eg "Duna"')
-			windower.add_to_chat(6, chat_l_blue..	'          delete \'name\'' .. chat_white .. '  --  Delete a GEO from the list.')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig dnc\'' .. chat_white .. '  --  Toggle if your party is getting Haste Samba from a main DNC or not.')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig hide\'' .. chat_white .. '  --  Hide all display (not a toggle).')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig show\'' .. chat_white .. '  --  add subcommand.')
-			windower.add_to_chat(6, chat_l_blue..	'              \'haste\'' .. chat_white .. '  --  Toggle hide Total haste.')
-			windower.add_to_chat(6, chat_l_blue..	'              \'tp\'' .. chat_white .. '  --  Toggle hide TP Calculator.')
-			windower.add_to_chat(6, chat_l_blue..	'              \'acc\'' .. chat_white .. '  --  Toggle hide Accuracy Calculations.')
-			windower.add_to_chat(6, chat_l_blue..	'              \'eva\'' .. chat_white .. '  --  Toggle hide Evasion Calculations.')
-			windower.add_to_chat(6, chat_l_blue..	'              \'def\'' .. chat_white .. '  --  Toggle hide Defence Calculations.')
-			windower.add_to_chat(6, chat_l_blue..	'              \'att\'' .. chat_white .. '  --  Toggle hide Attack Calculations.')
-			windower.add_to_chat(6, chat_l_blue..	'              \'stp\'' .. chat_white .. '  --  Toggle hide Store TP.')
-			windower.add_to_chat(6, chat_l_blue..	'              \'speed\'' .. chat_white .. '  --  Toggle hide movement speed (+/- %).')
-			windower.add_to_chat(6, chat_l_blue..	'              \'melee\' \'ranged\' \'magic\' \'tank\' \'recovery\' \'misc\' \'pet\'' .. chat_white .. '  --  Toggle a group of extra stat cards.')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig cards\'' .. chat_white .. '  --  List the extra stat cards (Fast Cast, DA, Snapshot...) and which are shown.')
-			windower.add_to_chat(6, chat_l_blue..	'              \'dw\'' .. chat_white .. '  --  Toggle hide DW Calculations.')
-			windower.add_to_chat(6, chat_l_blue..	'              \'ma\'' .. chat_white .. '  --  Toggle hide MA Calculations.')
-			windower.add_to_chat(6, chat_l_blue..	'              \'dt\'' .. chat_white .. '  --  Toggle hide DT Calculations.')
-			windower.add_to_chat(6, chat_l_blue..	'              \'all\'' .. chat_white .. '  --  Toggle all display options on.')
-			windower.add_to_chat(6, chat_l_blue..	'              \'cor\'' .. chat_white .. '  --  Toggle rollTracker chat display.')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig why pet|dt\'' .. chat_white .. '  --  List what each equipped item gives to Pet DT / your DT.')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig hover\'' .. chat_white .. '  --  Toggle the breakdown box shown when the mouse is over a card.')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig jobcards\'' .. chat_white .. '  --  Toggle a separate set of shown cards for each main job (on by default).')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig snap name\'' .. chat_white .. ' / ' .. chat_l_blue .. '\'diff name\'' .. chat_white .. ' / ' .. chat_l_blue .. '\'snaps\'' .. chat_white .. '  --  Save every card value as name / compare now with it / list.')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig food [name|off]\'' .. chat_white .. '  --  Show the food InfoGear counts, or set / clear it by hand.')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig sanction|sigil regen|refresh|food\'' .. chat_white .. '  --  Which bonus you picked for Sanction / Sigil.')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig size normal|small\'' .. chat_white .. '  --  Card size: small = smaller cards and text, same columns.')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig columns #\'' .. chat_white .. '  --  Cards per row: 4, 5 or 6 (4 = default). eg. ' .. chat_yellow .. '\/\/ig columns 6')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig scale #\'' .. chat_white .. '  --  Size of the whole display, 0.5 - 2 (1 = original). eg. ' .. chat_yellow .. '\/\/ig scale 0.8')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig help\'' .. chat_white .. '  --  This command or any mistakes will show this menu.')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig updategs'.. chat_white ..' or ' .. chat_l_blue .. 'ugs\'' .. chat_white .. '  --  toggle Send info to GearSwap for use, Can add true / false')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig update\'' .. chat_white .. '  --  forces 1 update to gearswap')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig debug\'' .. chat_white .. '  --  toggle debug mode')
-			windower.add_to_chat(6, chat_l_blue..	'\'\/\/ig r'.. chat_white ..' or ' .. chat_l_blue .. 'reload\'' .. chat_white .. '  --  Reload addon InfoGear.')
-			windower.add_to_chat(6, ' ')
-
-		-- elseif command:lower() == 'test' then	
-			-- check_none_existant_ids()
-		else
-			windower.send_command('ig help')
-		end
-	else
-		windower.send_command('ig help')
-	end
-end
+-- (v1.30) the commands are in Commands.lua (infogear_command)
 
 -- (v1.27) after every command, the card toggles are remembered for the current main job (Extras.lua)
 windower.register_event('addon command', function(...)
@@ -678,7 +306,7 @@ function why_command(args)
 	end
 	if not any then log('  nothing equipped gives these.') end
 	if what == 'pet' and pet_innate_dt and pet_innate_dt() > 0 then
-		log('  wyvern (innate): Damage taken -' .. pet_innate_dt() .. ', on top of the gear part (gear capped at 50 per type, all together at ' .. pet_dt_overall_cap .. ')')
+		log('  ' .. pet_innate_name() .. ' (innate): Damage taken -' .. pet_innate_dt() .. ', on top of the gear part (gear capped at 50 per type, all together at ' .. pet_dt_overall_cap .. ')')
 	end
 	local t = {}
 	for _, k in ipairs(keys) do t[#t + 1] = k .. ' ' .. (totals[k] or 0) end
@@ -807,7 +435,8 @@ windower.register_event('prerender',function()
 	if frame_count%2 == 0 and windower.ffxi.get_info().logged_in then
 		centre_all_text()
 	end
-    if frame_count%15 == 0 and windower.ffxi.get_info().logged_in then
+    if (frame_count%15 == 0 or (refresh_at_frame and frame_count >= refresh_at_frame)) and windower.ffxi.get_info().logged_in then
+		refresh_at_frame = nil	-- (v1.29) set when your weapons change, so the cards update right away
         local temp_equip = player.equipment
         local temp_stats = player.stats
 		local temp_pos = player.position
@@ -821,6 +450,7 @@ windower.register_event('prerender',function()
 		update_party()
 		calculate_total_haste()
         update()
+		cutscene_check()	-- (v1.29) Extras.lua
 		loop_count = loop_count + 1
     end
     frame_count = frame_count + 1

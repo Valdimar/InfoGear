@@ -93,27 +93,79 @@ function food_stats(id)
 	local item, desc = res.items[id], res.item_descriptions[id]
 	if not item or not desc or item.category ~= 'Usable' then return nil end
 	local text = desc.en:gsub('\n', ' ')
-	text = text:gsub('([+-])%d+%%%s?%(Max%.%s?(%d+)%)', '%1%2')
+	-- (v1.29) "+10% (Max. 75)": the percent and the cap are packed into one number (percent x 100000 + cap) so the
+	-- gear parser keeps them with the right stat; unpacked below
+	text = text:gsub('([+-])(%d+)%%%s?%(Max%.%s?(%d+)%)', function(sign, p, m) return sign .. (tonumber(p) * 100000 + tonumber(m)) end)
 	-- short forms some foods use
 	text = text:gsub('\"M%.%s?Atk%.%s?Bonus\"', '\"Magic Atk. Bonus\"'):gsub('\"M%.%s?Def%.%s?Bonus\"', '\"Magic Def. Bonus\"')
 	text = text:gsub('R%.%s?Accuracy', 'Ranged Accuracy'):gsub('R%.%s?Attack', 'Ranged Attack')
 	text = text:gsub('M%.%s?Accuracy', 'Magic Accuracy'):gsub('M%.%s?Evasion', 'Magic Evasion')
 	text = text:gsub('[HM]P recovered [%a ]-healing%s?[+-]%d+', '')	-- resting only
 	local parsed = desypher_description(text, item)
-	local stats, any = {}, false
+	local stats, pct, any = {}, {}, false
 	for k, v in pairs(parsed) do
 		if type(v) == 'number' and v ~= 0 and k ~= 'delay' and k ~= 'damage' then
-			stats[k] = v
+			local a = math.abs(v)
+			if a >= 100000 then	-- a percent stat: stats[k] = its cap, pct[k] = {percent, cap, sign}
+				local sign = v < 0 and -1 or 1
+				pct[k] = {math.floor(a / 100000), a % 100000, sign}
+				stats[k] = sign * (a % 100000)
+			else
+				stats[k] = v
+			end
 			any = true
 		end
 	end
-	return any and stats or nil
+	return any and stats or nil, pct
+end
+
+-- (v1.29) The totals InfoGear showed last time (Display.lua notes them), so a percent food can be worked out from
+-- your stat before food: Accuracy +10% (Max. 75) with 600 accuracy before food = +60. HP / MP use the game's max.
+food_totals = {}
+local food_applied = {}
+function note_total(stat, value)
+	value = tonumber(value)
+	if value and value > 0 then food_totals[stat] = value end
+end
+
+local function food_base(stat)
+	local total
+	if stat == 'HP' then total = player and player.vitals and tonumber(player.vitals.max_hp)
+	elseif stat == 'MP' then total = player and player.vitals and tonumber(player.vitals.max_mp)
+	else total = food_totals[stat] end
+	if not total then return nil end
+	return total - (food_applied[stat] or 0)
+end
+
+-- the stats the food gives now, and a note per percent stat for the hover box
+local function food_now()
+	local stats, notes = {}, {}
+	for k, v in pairs(food.stats) do
+		local p = food.pct and food.pct[k]
+		if p then
+			local base = food_base(k)
+			if base and base > 0 then
+				local raw = math.floor(base * p[1] / 100)
+				v = p[3] * math.min(p[2], raw)
+				notes[k] = string.format(' (%d%% of %d, max %d)', p[1], base, p[2])
+			else
+				v = p[3] * p[2]
+				notes[k] = string.format(' (%d%%, counted at the max %d)', p[1], p[2])
+			end
+		end
+		stats[k] = v
+	end
+	food_applied = {}
+	for k, v in pairs(stats) do food_applied[k] = v end
+	return stats, notes
 end
 
 local function set_food(id, quiet)
-	local stats = id and food_stats(id)
+	local stats, pct
+	if id then stats, pct = food_stats(id) end
 	if not stats then return false end
-	food = {id = id, name = res.items[id].en, stats = stats}
+	food = {id = id, name = res.items[id].en, stats = stats, pct = pct}
+	food_applied = {}
 	food_set_at = os.time()
 	food_seen = false
 	settings.player.food_id = id
@@ -178,7 +230,14 @@ local function field_buff_sources()
 					end
 					stats = {}
 				else
-					stats = fb.options[pick]
+					-- (v1.29) an option works only below its HP / MP threshold
+					local opt = fb.options[pick]
+					local hpp = player and player.vitals and tonumber(player.vitals.hpp)
+					local mpp = player and player.vitals and tonumber(player.vitals.mpp)
+					local working = true
+					if opt.below_hpp and hpp and hpp >= opt.below_hpp then working = false end
+					if opt.below_mpp and mpp and mpp >= opt.below_mpp then working = false end
+					stats = working and (opt.stats or {}) or {}
 					label = fb.name .. ' (' .. pick .. ')'
 				end
 			end
@@ -198,7 +257,10 @@ extra_sources = {}
 function add_extra_sources(stat_table)
 	food_check()
 	extra_sources = {}
-	if food then extra_sources[#extra_sources + 1] = {name = 'Food: ' .. food.name, stats = food.stats} end
+	if food then
+		local stats, notes = food_now()
+		extra_sources[#extra_sources + 1] = {name = 'Food: ' .. food.name, stats = stats, notes = notes}
+	end
 	for _, s in ipairs(field_buff_sources()) do extra_sources[#extra_sources + 1] = s end
 	for _, src in ipairs(extra_sources) do
 		for k, v in pairs(src.stats) do
@@ -317,7 +379,7 @@ for _, c in ipairs(extra_cards or {}) do
 	if e then
 		local keys = {}
 		for _, k in ipairs(e) do keys[#keys + 1] = k end
-		card_specs[c.idx] = {keys = keys, buffs = e.buffs, note = e.note}
+		card_specs[c.idx] = {keys = keys, buffs = e.buffs, note = e.note, key = c.key}
 	end
 end
 
@@ -330,6 +392,12 @@ local function haste_pct(v) return string.format('%+.1f%%', v / 1024 * 100) end
 
 function card_breakdown(idx)
 	local b = sections.block[idx]
+	if idx == 63 and b then	-- (v1.29) Hit %
+		local _, _, info = hit_rate()
+		local lines = {(b.label or '') .. '  ' .. tostring(b.value or '')}
+		for _, l in ipairs(info) do lines[#lines + 1] = l end
+		return lines
+	end
 	local spec = card_specs[idx]
 	if not b or not spec then return nil end
 	local lines = {}
@@ -359,7 +427,7 @@ function card_breakdown(idx)
 		for _, k in ipairs(spec.keys) do
 			local v = src.stats[k]
 			if v and v ~= 0 then
-				parts[#parts + 1] = k .. ' ' .. fmt(v) .. (k == 'Haste' and '%' or '')
+				parts[#parts + 1] = k .. ' ' .. fmt(v) .. (k == 'Haste' and '%' or '') .. ((src.notes and src.notes[k]) or '')
 				totals[k] = (totals[k] or 0) + (k == 'Haste' and math.floor(v / 100 * 1024) or v)
 			end
 		end
@@ -394,8 +462,14 @@ function card_breakdown(idx)
 			lines[#lines + 1] = string.format('%-10s %s', 'buff', name .. from .. ': ' .. table.concat(parts, ', '))
 		end
 	end
+	-- (v1.29) job traits, merits, job points
+	if spec.key and card_trait_parts then
+		for _, p in ipairs((card_trait_parts(spec.key))) do
+			lines[#lines + 1] = string.format('%-10s %s', 'job', p[1] .. ': ' .. fmt(p[2]))
+		end
+	end
 	if idx == 59 and pet_innate_dt and pet_innate_dt() > 0 then
-		lines[#lines + 1] = string.format('%-10s %s', '', 'wyvern innate: DT -' .. pet_innate_dt() .. ' (total cap ' .. pet_dt_overall_cap .. ')')
+		lines[#lines + 1] = string.format('%-10s %s', '', pet_innate_name() .. ' innate: DT -' .. pet_innate_dt() .. ' (total cap ' .. pet_dt_overall_cap .. ')')
 	end
 	if #lines == 1 then lines[#lines + 1] = 'nothing equipped or active gives this' end
 	if spec.note then lines[#lines + 1] = '(' .. spec.note .. ')' end
@@ -559,12 +633,16 @@ end
 -------------------------------------------------------------------------------------------------------------
 function extras_command(command, args)
 	if command == 'hover' then
-		settings.player.hover = settings.player.hover == false
+		local v = parse_on_off and parse_on_off(args[1])
+		if v == nil then v = settings.player.hover == false end
+		settings.player.hover = v
 		if settings.player.hover == false then hide_tip() end
 		settings:save('all')
 		say('Hover breakdown ' .. (settings.player.hover == false and 'off' or 'on') .. '.')
 	elseif command == 'jobcards' then
-		settings.player.job_cards = not job_cards_on()
+		local v = parse_on_off and parse_on_off(args[1])
+		if v == nil then v = not job_cards_on() end
+		settings.player.job_cards = v
 		if job_cards_on() then preset_job = nil end	-- picks up the current job on the next update
 		settings:save('all')
 		say('Cards per job ' .. (job_cards_on() and 'on: each main job keeps its own cards.' or 'off: the same cards on every job.'))
@@ -600,6 +678,29 @@ function extras_command(command, args)
 		end
 		settings:save('all')
 		say(command:gsub('^%l', string.upper) .. ' bonus: ' .. (settings.player[command] ~= '' and settings.player[command] or 'none') .. '.')
+	elseif command == 'regen' or command == 'refresh' then
+		-- (v1.29) extra HP / MP per tick on a Regen / Refresh spell cast on you (the caster's potency gear etc.)
+		local v = args[1] and tonumber((tostring(args[1]):gsub('^%+', '')))
+		if v then
+			settings.player[command .. '_bonus'] = v
+			settings:save('all')
+		end
+		say(command:gsub('^%l', string.upper) .. ' spells on you count ' .. fmt(tonumber(settings.player[command .. '_bonus']) or 0)
+			.. ' per tick on top of the spell\'s base value. //ig ' .. command .. ' <number> changes it.')
+	elseif command == 'lock' then
+		local v = parse_on_off and parse_on_off(args[1])
+		if v == nil then v = not settings.player.locked end
+		settings.player.locked = v
+		settings:save('all')
+		say('Display ' .. (settings.player.locked and 'locked: it can\'t be dragged (//ig lock off to unlock).' or 'unlocked: drag it to move it.'))
+	elseif command == 'cutscene' then
+		local v = parse_on_off and parse_on_off(args[1])
+		if v == nil then v = settings.player.hide_cutscene == false end
+		settings.player.hide_cutscene = v
+		settings:save('all')
+		say('Hide during cutscenes ' .. (settings.player.hide_cutscene == false and 'off.' or 'on.'))
+	elseif command == 'eva' then
+		hit_eva_command(args)
 	elseif command == 'snap' then
 		snap_command(args)
 	elseif command == 'diff' then
@@ -610,4 +711,103 @@ function extras_command(command, args)
 		return false
 	end
 	return true
+end
+
+-------------------------------------------------------------------------------------------------------------
+-- (v1.29) weapons changed: skill in gear (Acc / Att / TP) worked out again at once, and the cards updated within a
+-- couple of frames of the equip packet instead of at the next quarter-second refresh
+-------------------------------------------------------------------------------------------------------------
+local last_weapons = nil
+
+function weapon_check(equip)
+	if type(equip) ~= 'table' then return end
+	local function id_of(slot) return (equip[slot] and equip[slot].id) or 0 end
+	local now = id_of('main') .. ':' .. id_of('sub') .. ':' .. id_of('range') .. ':' .. id_of('ammo')
+	if last_weapons and now ~= last_weapons and get_player_skill_in_gear then
+		pcall(get_player_skill_in_gear, equip)
+	end
+	last_weapons = now
+end
+
+windower.register_event('incoming chunk', function(id)
+	if id == 0x050 then refresh_at_frame = (frame_count or 0) + 2 end	-- equipment changed
+end)
+
+-------------------------------------------------------------------------------------------------------------
+-- (v1.29) cutscenes: the display hides while you're in one (status 4, "event"); //ig cutscene turns this off
+-------------------------------------------------------------------------------------------------------------
+function cutscene_check()
+	local in_event = player and tonumber(player.status) == 4
+	local hide = in_event and settings.player.hide_cutscene ~= false
+	if set_display_hidden then set_display_hidden(hide and true or false) end
+	if hide and tip_shown then hide_tip() end
+end
+
+-------------------------------------------------------------------------------------------------------------
+-- (v1.29) Hit % against your target. BG-Wiki (Hit Rate): 75 + floor((Accuracy - Evasion) / 2) - 2 x (target level -
+-- your level), at least 20, at most 99 (one-handed main weapon, hand-to-hand) or 95 (two-handed).
+-- Windower can't see a monster's evasion or level: //ig eva <number> sets the evasion for monsters with your target's
+-- name (saved in data/<name>_mobs.lua), and /check gives its level. Until then the card shows "--".
+-------------------------------------------------------------------------------------------------------------
+local mob_data = nil		-- [monster name] = {eva = n, level = n}
+local function mobs() if not mob_data then mob_data = read_table(data_path('_mobs.lua')) end return mob_data end
+
+local TWO_HANDED = {['Great Sword'] = true, ['Great Axe'] = true, ['Scythe'] = true, ['Polearm'] = true,
+	['Great Katana'] = true, ['Staff'] = true}
+
+local function current_target()
+	local t = windower.ffxi.get_mob_by_target('t')
+	if t and t.is_npc and t.spawn_type == 16 then return t end	-- 16 = monster
+	return nil
+end
+
+-- /check: "<target> seems to be ... (Lv. n)" is action message 170-178 with the level as param 1
+windower.register_event('action message', function(actor_id, target_id, actor_index, target_index, message_id, param_1)
+	if message_id >= 170 and message_id <= 178 and player and actor_id == player.id then
+		local mob = windower.ffxi.get_mob_by_id(target_id)
+		if mob and mob.name and tonumber(param_1) and tonumber(param_1) > 0 then
+			local m = mobs()
+			m[mob.name] = m[mob.name] or {}
+			m[mob.name].level = tonumber(param_1)
+			write_table(data_path('_mobs.lua'), m)
+		end
+	end
+end)
+
+-- returns the text for the card, whether to show it red (under 80%), and lines for the hover box
+function hit_rate()
+	local t = current_target()
+	if not t then return '--', false, {'no monster targeted'} end
+	local m = mobs()[t.name] or {}
+	if not m.eva then return '--', false, {t.name .. ': evasion not set', '//ig eva <number> sets it for "' .. t.name .. '"'} end
+	local acc = tonumber(last_main_acc)
+	if not acc then return '--', false, {'turn on the Acc. card (//ig show acc) so InfoGear works out your accuracy'} end
+	local mylv = tonumber(player.main_job_level) or 99
+	local dlv = m.level and (m.level - mylv) or 0
+	local hit = 75 + math.floor((acc - m.eva) / 2) - 2 * dlv
+	local main = player.equipment and player.equipment.main
+	local cap = (type(main) == 'table' and TWO_HANDED[main.skill]) and 95 or 99
+	hit = math.max(20, math.min(cap, hit))
+	local lines = {
+		string.format('%s: evasion %d, level %s', t.name, m.eva, m.level and tostring(m.level) or '? (/check it)'),
+		string.format('your Acc %d: 75 + (%d - %d) / 2 - 2 x %d', acc, acc, m.eva, dlv),
+		string.format('cap %d%% (%s), floor 20%%', cap, cap == 95 and 'two-handed' or 'one-handed / H2H'),
+	}
+	return hit .. '%', hit < 80, lines
+end
+
+function hit_eva_command(args)
+	local t = current_target()
+	local v = args[1] and tonumber(args[1])
+	if not t then say('Target a monster first, then //ig eva <number>.') return end
+	local m = mobs()
+	if not v then
+		local d = m[t.name] or {}
+		say(t.name .. ': evasion ' .. tostring(d.eva or 'not set') .. ', level ' .. tostring(d.level or 'not checked') .. '. //ig eva <number> sets the evasion.')
+		return
+	end
+	m[t.name] = m[t.name] or {}
+	m[t.name].eva = v
+	write_table(data_path('_mobs.lua'), m)
+	say('Evasion ' .. v .. ' saved for "' .. t.name .. '"' .. (m[t.name].level and '' or ' (/check it to add its level)') .. '.')
 end

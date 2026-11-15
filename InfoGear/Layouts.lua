@@ -35,6 +35,7 @@ card_groups = {
 	-- melee
 	{key = 'tp',      section = 'melee',    blocks = {9, 10, 11, 28}},		-- TP/h, to WS, aft WS, STP
 	{key = 'accatt',  section = 'melee',    blocks = {12, 13, 14, 15}},	-- Acc.1, Acc.2, Att.1, Att.2
+	{key = 'hit',     section = 'melee',    blocks = {63}},				-- Hit % (v1.29)
 	{key = 'multi',   section = 'melee',    blocks = {38, 39, 40}},		-- DA, TA, QA
 	{key = 'crit',    section = 'melee',    blocks = {41, 42}},			-- Crit, Crit.D
 	{key = 'ws',      section = 'melee',    blocks = {45, 46}},			-- WSD, PDL
@@ -62,7 +63,7 @@ card_last = 29	-- UGS: last row if there's room, else the first gap
 -- (v1.7) Extra stat cards. Each is turned on with //ig show <key> or a whole group with //ig show <group>; all
 -- start off. Values and caps are in Display.lua (extra_card_values).
 extra_card_groups = {
-	{key = 'melee',  title = 'multi-attack, crit, Subtle Blow, WSD, PDL', color = {245, 170, 90}},
+	{key = 'melee',  title = 'multi-attack, crit, Subtle Blow, WSD, PDL, Hit % against your target', color = {245, 170, 90}},
 	{key = 'ranged', title = 'Snapshot, Rapid Shot',                        color = {130, 215, 150}},
 	{key = 'magic',  title = 'Fast Cast, magic acc / attack, burst, Cure, Conserve MP',  color = {200, 150, 255}},
 	{key = 'tank',   title = 'magic evasion / defence, Phalanx, Enmity, SIRD',    color = {226, 220, 196}},
@@ -94,6 +95,7 @@ extra_cards = {
 	{idx = 50, key = 'mdb',     group = 'tank',   label = 'MDB'},
 	{idx = 51, key = 'phalanx', group = 'tank',   label = 'Phalanx'},
 	{idx = 52, key = 'enmity',  group = 'tank',   label = 'Enmity'},
+	{idx = 63, key = 'hit',     group = 'melee',  label = 'Hit %'},	-- (v1.29) hit rate against your target
 	{idx = 61, key = 'sird',    group = 'tank',   label = 'SIRD'},	-- (v1.27) Spell interruption rate down
 	{idx = 53, key = 'hp',      group = 'misc',   label = 'HP'},
 	{idx = 54, key = 'mp',      group = 'misc',   label = 'MP'},
@@ -302,90 +304,52 @@ end
 function size_command(args)
 	local wanted = args[1] and tostring(args[1]):lower()
 	if not wanted then
-		log('Card size: ' .. layout_current_size() .. '. Use //ig size normal or //ig size small.')
+		log('Card size: ' .. layout_current_size() .. '. //ig size normal|small changes it.')
 		return
 	end
 	if not card_sizes[wanted] then
-		log('Card size can be normal or small.')
+		log('Card size can be normal or small: //ig size normal|small.')
 		return
 	end
 	settings.display.size = wanted
 	settings:save('all')
 	if check_positions then check_positions() end
-	log('Card size -> ' .. wanted)
+	log('Card size: ' .. wanted .. '.')
 end
 
 -- (v1.8) //ig columns [4|5|6]
 function columns_command(args)
 	local n = tonumber(args[1])
 	if not n then
-		log('Columns: ' .. layout_current_columns() .. '. Use //ig columns 4, 5 or 6.')
+		log('Columns: ' .. layout_current_columns() .. '. //ig columns 4|5|6 changes it.')
 		return
 	end
 	n = math.floor(n)
 	if n < 4 or n > 6 then
-		log('Columns can be 4, 5 or 6.')
+		log('Columns can be 4, 5 or 6: //ig columns 4|5|6.')
 		return
 	end
 	settings.display.columns = n
 	settings:save('all')
 	if check_positions then check_positions() end
-	log('Columns -> ' .. n)
+	log('Columns: ' .. n .. '.')
 end
 
 function scale_command(args)
 	local n = tonumber(args[1])
 	if not n then
-		log('Scale is ' .. layout_current_scale() .. '. Use //ig scale <0.5 - 2>, e.g. //ig scale 0.8 (1 = normal size).')
+		log('Scale: ' .. layout_current_scale() .. '. //ig scale <0.5-2> changes it (1 = normal size).')
 		return
 	end
 	if n < 0.5 then n = 0.5 elseif n > 2 then n = 2 end
 	settings.display.scale = n
 	settings:save('all')
 	if check_positions then check_positions() end
-	log('Scale -> ' .. n)
+	log('Scale: ' .. n .. '.')
 end
 
 -------------------------------------------------------------------------------------------------------------
 -- (v1.7) //ig show <card | group>, //ig cards
 -------------------------------------------------------------------------------------------------------------
 -- Returns true when `name` is an extra card or group (and toggles it), false otherwise.
-function extra_card_toggle(name)
-	settings.player.cards = settings.player.cards or {}
-	local cards = settings.player.cards
-	for _, c in ipairs(extra_cards) do
-		if c.key == name then
-			cards[c.key] = not (cards[c.key] == true)
-			log('Show ' .. c.label .. ' = ' .. tostring(cards[c.key]))
-			return true
-		end
-	end
-	for _, g in ipairs(extra_card_groups) do
-		if g.key == name then
-			-- if any card of the group is off, turn them all on; if all are on, turn them all off
-			local all_on = true
-			for _, c in ipairs(extra_cards) do
-				if c.group == g.key and cards[c.key] ~= true then all_on = false end
-			end
-			local labels = {}
-			for _, c in ipairs(extra_cards) do
-				if c.group == g.key then cards[c.key] = not all_on; labels[#labels + 1] = c.label end
-			end
-			log('Show ' .. g.key .. ' (' .. table.concat(labels, ', ') .. ') = ' .. tostring(not all_on))
-			return true
-		end
-	end
-	return false
-end
-
-function extra_cards_list()
-	local cards = settings.player.cards or {}
-	log('Extra cards: //ig show <name> for one, //ig show <group> for a whole group. (* = shown)')
-	for _, g in ipairs(extra_card_groups) do
-		local parts = {}
-		for _, c in ipairs(extra_cards) do
-			if c.group == g.key then parts[#parts + 1] = c.key .. (cards[c.key] == true and '*' or '') end
-		end
-		log(string.format('  %-6s %s', g.key, table.concat(parts, ' ')))
-	end
-end
+-- (v1.30) showing / hiding and listing cards: Commands.lua (set_card, cards_list)

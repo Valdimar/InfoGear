@@ -67,8 +67,9 @@ function check_buffs()
 			this_buff['ma_haste'] = -1024
 		end
 		-- (v1.26) Regen (42) / Refresh (43) from a spell: the tier InfoGear saw cast on you (else tier I)
-		if buff.id == 42 then this_buff['Regen'] = last_recovery_spell['Regen'] or 5 end
-		if buff.id == 43 then this_buff['Refresh'] = last_recovery_spell['Refresh'] or 3 end
+		-- (v1.29) plus the caster's potency you set with //ig regen <n> / //ig refresh <n>
+		if buff.id == 42 then this_buff['Regen'] = (last_recovery_spell['Regen'] or 5) + (tonumber(settings.player.regen_bonus) or 0) end
+		if buff.id == 43 then this_buff['Refresh'] = (last_recovery_spell['Refresh'] or 3) + (tonumber(settings.player.refresh_bonus) or 0) end
 		if buff.id == 13 then -- slow or slow2
 			this_buff['ma_haste'] = -300
 		end

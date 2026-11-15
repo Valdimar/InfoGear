@@ -263,3 +263,102 @@ function martial_arts_base_delays()
 	end
 	return main_delay, sub_delay
 end
+
+-------------------------------------------------------------------------------------------------------------
+-- (v1.29) Job traits, merits and job point gifts for the extra cards (Display.lua extra_card_values).
+--
+-- For each card: main / sub ladders by level ({first_level, value}, like above; a trait from the main and from
+-- the sub job doesn't stack, the higher counts), merits (player.merits.<name> x value per level; job = only on
+-- that main job) and gift effect names from res/Gifts.lua (main job only, by job points spent; some names in that
+-- file are misspelled, so both spellings are listed). jp = trait tiers bought with job points (absolute values).
+-- Sources: BG-Wiki (Fast Cast, Subtle Blow, Conserve MP, Triple Attack trait pages; BLM trait levels from the
+-- Community Black Mage Guide), FFXIclopedia (Double Attack, RDM / WAR trait levels), Windower merit resources.
+-- Blue Mage traits from set spells are not counted here.
+-------------------------------------------------------------------------------------------------------------
+Card_Traits = {
+	da = {name = 'Double Attack', main = {WAR = {{25, 10}}}, sub = {WAR = {{25, 10}}},
+		merit = {key = 'double_attack_rate', per = 1, job = 'WAR'}, gifts = {'Double Attack Effect', 'Double Rate Attack'}},
+	ta = {name = 'Triple Attack', main = {THF = {{55, 5}, {95, 6}}}, sub = {THF = {{55, 5}}},
+		merit = {key = 'triple_attack_rate', per = 1, job = 'THF'}, gifts = {'Triple Attack Chance'}},
+	crit = {name = 'Critical hit rate', merit = {key = 'critical_hit_rate', per = 1}, gifts = {'Critical Hit Bonus'}},
+	critdmg = {name = 'Critical hit damage', gifts = {'Critical Damage Bonus', 'Critical Dmaage Bonus', 'Critical Damage Dealt'}},
+	sb = {name = 'Subtle Blow',
+		main = {MNK = {{5, 5}, {25, 10}, {40, 15}, {65, 20}, {91, 25}},
+		        NIN = {{15, 5}, {30, 10}, {45, 15}, {60, 20}, {75, 25}, {91, 27}},
+		        DNC = {{25, 5}, {45, 10}, {65, 15}, {86, 20}}},
+		sub = {MNK = {{5, 5}, {25, 10}, {40, 15}}, NIN = {{15, 5}, {30, 10}, {45, 15}}, DNC = {{25, 5}, {45, 10}}},
+		jp = {DNC = {{80, 25}, {405, 27}, {980, 29}, {1805, 32}}},
+		gifts = {'Subtle Blow Effect'}},	-- MNK's gifts are tiers VI-IX (27 / 29 / 32 / 35)
+	wsd = {name = 'Weapon Skill Damage', gifts = {'Weapon Skill Damage'}},
+	fc = {name = 'Fast Cast', main = {RDM = {{15, 10}, {35, 15}, {55, 20}, {76, 25}, {89, 30}}},
+		sub = {RDM = {{15, 10}, {35, 15}}}, gifts = {'Fast Cast Effect'}},	-- gifts: tiers VI-IX (32 ... 38)
+	mab = {name = 'Magic Atk. Bonus',
+		main = {BLM = {{10, 20}, {30, 24}, {50, 28}, {70, 32}, {84, 36}, {91, 40}}, RDM = {{20, 20}, {40, 24}, {86, 28}}},
+		sub = {BLM = {{10, 20}, {30, 24}}, RDM = {{20, 20}, {40, 24}}}, gifts = {'Magic Attack Bonus'}},
+	conserve = {name = 'Conserve MP',
+		main = {GEO = {{10, 25}, {25, 28}, {40, 31}, {55, 34}, {70, 37}, {85, 40}, {99, 43}},
+		        BLM = {{20, 25}, {76, 28}, {86, 31}}, SCH = {{25, 25}, {96, 28}}},
+		sub = {GEO = {{10, 25}, {25, 28}, {40, 31}}, BLM = {{20, 25}}, SCH = {{25, 25}}}},
+	-- (WHM's Cure Potency gifts are left out: whether they count toward the 50% cap isn't clear)
+	macc = {name = 'Magic Accuracy', gifts = {'Magic Accuracy Bonus', 'Magic Accuracy bonus'}},
+	meva = {name = 'Magic Evasion', gifts = {'Magic Evasion Bonus'}},
+	mdb = {name = 'Magic Def. Bonus', gifts = {'Magic Defense Bonus'}},
+	th = {name = 'Treasure Hunter', main = {THF = {{15, 1}, {45, 2}}}, sub = {THF = {{15, 1}}}},
+	sird = {name = 'Spell interruption', merit = {key = 'spell_interruption_rate', per = 2}},
+}
+
+local function safe_jp()
+	local ok, jp = pcall(job_points_spent)
+	return (ok and tonumber(jp)) or 0
+end
+
+local function gifts_total(names)
+	local job = player and player.main_job
+	local g = job and Gifts[job] and Gifts[job]['Gifts']
+	if not g then return 0 end
+	local jp, total = safe_jp(), 0
+	for threshold, effects in pairs(g) do
+		if threshold <= jp then
+			for _, n in ipairs(names) do total = total + (tonumber(effects[n]) or 0) end
+		end
+	end
+	return total
+end
+
+-- The parts of a card's number that come from your job: list of {label, value}; and the total.
+function card_trait_parts(key)
+	local t = Card_Traits[key]
+	local parts, total = {}, 0
+	if not t or not player or not player.main_job then return parts, 0 end
+	local main, sub = player.main_job, player.sub_job
+	local mlv, slv = tonumber(player.main_job_level) or 0, tonumber(player.sub_job_level) or 0
+	-- trait: the higher of main / sub (and job point tiers on the main job)
+	local mv = t.main and t.main[main] and by_level(t.main[main], mlv) or 0
+	if t.jp and t.jp[main] and mlv >= 99 then mv = math.max(mv, by_level(t.jp[main], safe_jp())) end
+	local sv = (sub and t.sub and t.sub[sub]) and by_level(t.sub[sub], slv) or 0
+	if mv > 0 or sv > 0 then
+		local v, from = math.max(mv, sv), (mv >= sv) and (main .. ' ' .. mlv) or ('/' .. sub .. ' ' .. slv)
+		parts[#parts + 1] = {'trait (' .. from .. ')', v}
+		total = total + v
+	end
+	if t.merit then
+		local lv = tonumber(player.merits and player.merits[t.merit.key]) or 0
+		if lv > 0 and (not t.merit.job or t.merit.job == main) then
+			parts[#parts + 1] = {'merits (' .. lv .. ')', lv * t.merit.per}
+			total = total + lv * t.merit.per
+		end
+	end
+	if t.gifts then
+		local g = gifts_total(t.gifts)
+		if g ~= 0 then
+			parts[#parts + 1] = {'job points (' .. safe_jp() .. ')', g}
+			total = total + g
+		end
+	end
+	return parts, total
+end
+
+function card_trait_total(key)
+	local _, total = card_trait_parts(key)
+	return total
+end
