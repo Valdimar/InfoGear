@@ -359,3 +359,9 @@ except for the intentional changes below. A deliberately injected bug is detecte
 * **Comments** in every file: each file starts with what it does and how it fits in, and every function, table and tricky block says what it is for. The code itself is unchanged (checked token by token against 1.30, comments ignored); a few old comments that had gone out of date are corrected (cards 31-63, how UGS is placed, the extra cards now counting job traits).
 * **Fix:** after a weapon change, weapon skill could be taken off twice (the skills packet and the weapon-change refresh both worked on the game's own skill table), so Acc / Att could stay too low until the next skills packet. Skill without gear is now worked out on a copy.
 * **Fix:** Ionis's Accuracy +20 was counted twice in Adoulin (the buff code and res/Field_Buffs.lua). It's now only in the buff code (with Ranged Accuracy +20 and its 3% haste); Field_Buffs adds the Evasion +20.
+
+## v1.32 – update check
+
+* **Update check:** a few seconds after you log in, InfoGear reads the version on GitHub
+  (github.com/Valdimar/InfoGear) once and says in chat when a newer one is out. It stays quiet if
+  GitHub can't be reached. The code is in the new `update_check.lua`.

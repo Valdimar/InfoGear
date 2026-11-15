@@ -12,11 +12,19 @@
 
 _addon.name = 'InfoGear'
 _addon.author = 'Valdimar @ Phoenix'	-- based on GearInfo by Sebyg666
-_addon.version = '1.31'
+_addon.version = '1.32'
 
 -- Raise this whenever the gear parser learns new stats: each character's saved gear is then read again once.
 GEAR_PARSER_VERSION = 8	-- 8: v1.27 SIRD, Conserve MP; 3: v1.11 Unity table; 4: v1.12 pet damage taken; 5: v1.15 pet absorb fix; 6: v1.17 pet regen; 7: v1.18 cape augments
 _addon.commands = {'ig','infogear'}
+
+-- Says in chat when a newer version is on GitHub (once per load; see update_check.lua)
+require('update_check').start({
+    name    = 'InfoGear',
+    version = _addon.version,
+    url     = 'https://raw.githubusercontent.com/Valdimar/InfoGear/main/InfoGear/InfoGear.lua',
+    page    = 'github.com/Valdimar/InfoGear',
+})
 
 
 -- Windower libraries
