@@ -365,3 +365,9 @@ except for the intentional changes below. A deliberately injected bug is detecte
 * **Update check:** a few seconds after you log in, InfoGear reads the version on GitHub
   (github.com/Valdimar/InfoGear) once and says in chat when a newer one is out. It stays quiet if
   GitHub can't be reached. The code is in the new `update_check.lua`.
+
+## v1.33 – update check always reports
+
+* **Update check** now always says in chat what it found when the addon loads: up to date, UPDATE AVAILABLE
+  (in a different colour), newer than GitHub (not released yet), or couldn't check (no HTTPS support / GitHub
+  didn't answer). Before, it only spoke up when GitHub had a newer version.
