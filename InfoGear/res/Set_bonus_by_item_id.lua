@@ -1,3 +1,7 @@
+-- res/Set_bonus_by_item_id.lua (generated, from GearInfo)
+-- Every set piece, by item id: which set it belongs to ("set id", a number or a list) and the set's bonus text.
+-- Used by Gear_Processing.find_all_values to tag the item; the bonus itself comes from Set_bonus_by_Set_ID.lua.
+
 return {
     [10315]={
         ["Set Bonus"]="Magic damage taken -5%", 

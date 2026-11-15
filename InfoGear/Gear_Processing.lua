@@ -1,6 +1,17 @@
+-- Gear_Processing.lua
+-- Reading gear: turns an item's description (from Windower's resources) and its augments into a table of stats,
+-- adds them up for everything you have on (with set bonuses), and adds the parts that aren't gear (base skills,
+-- base stats, Blue Mage spells). Then the Acc / Att / Eva / Def formulas.
+--
+-- Flow, every update (Display.update): check_equipped() -> get_equip_stats() -> build_combined_stats() -> Gear_info,
+-- then get_player_acc / att / evasion / defence(Gear_info) for the cards.
+-- find_all_values() runs once per item when your inventory is read (parse_inventory, InfoGear.lua); the results
+-- are saved in data/<name>_data.lua so items aren't parsed every time.
+
 
 -- (v1.11) Unity Ranking value for your rank (//ig rank): rank 1 gives max, the formula is GearInfo's. Works for
 -- negative ranges too (Enmity-5 to -10).
+--
 function unity_value(min, max, rank)
 	rank = tonumber(rank) or 1
 	local sign = (max < 0 or min < 0) and -1 or 1
@@ -9,14 +20,19 @@ function unity_value(min, max, rank)
 	return sign * (math.floor(((max - min) / 11) * (11 - (rank - 1)) + 0.0000001) + min)
 end
 
+-- Everything InfoGear knows about one item you own: name, id, category, jobs, slots, item level, augments and
+-- every stat from its description + augments, Dual Wield gear, Unity rank bonus and its set (if any).
+-- item = an inventory entry (with extdata). Returns nil for items Windower's resources don't know yet.
 function find_all_values(item)
 	-- notice(item.id)
+	-- stats from the augments (nil if none)
 	local temp = check_for_augments(item)
 	local augs = Extdata.decode(item).augments
 	
 	local item = res.items[item.id]
 	if not item then return nil end   -- item newer than the installed resources
 	
+	-- only gear
 	if item.flags:contains('Equippable') then
 	
 		if res.item_descriptions[item.id] then
@@ -26,8 +42,10 @@ function find_all_values(item)
 		end
 		
 		descript_table = T{}
+		-- stats from the description
 		descript_table = desypher_description(item.discription, item)
 		
+		-- jobs and slots as names
 		item.defined_job = T{}
 		
 		for k, v in pairs(item.jobs) do
@@ -39,6 +57,7 @@ function find_all_values(item)
 			item.defined_slots[k] = res.slots[k].en	
 		end
 	
+		-- the saved item
 		local edited_item = T{en=item.en, id=item.id, category=item.category , discription = item.discription, jobs = item.defined_job, slots = item.defined_slots}
 		
 			--item_level
@@ -71,11 +90,13 @@ function find_all_values(item)
 			edited_item['Unity Ranking Bonus Applied'] = table.concat(applied, ', ')
 		end
 		
+		-- which set it belongs to (res/Set_bonus_by_item_id.lua); the bonus is worked out in get_equip_stats
 		local set_bonus_entry = Set_bonus_by_item_id[item.id]
 		if set_bonus_entry then
 			edited_item['Set Bonus'] = {["set id"] = set_bonus_entry["set id"], ["bonus"] = set_bonus_entry["bonus"] }
 		end
 		
+		-- weapons: the skill as a name ("Sword")
 		if item.category == 'Weapon' then
 			for k,v in pairs(item) do
 				-- if k == 'delay' then	
@@ -88,6 +109,7 @@ function find_all_values(item)
 			end
 		end
 		
+		-- add the augments on top of the description
 		if temp then
 			local temp_augments = T{}
 			for k, v in pairs(temp) do
@@ -108,6 +130,7 @@ function find_all_values(item)
 		
 end
 
+-- The stats from an item's augments (Extdata.decode), each line read like a description. nil if no augments.
 function check_for_augments(item)
 	
 	local augs = Extdata.decode(item).augments
@@ -134,6 +157,8 @@ function check_for_augments(item)
 end
 
 -- (v1.7) see desypher_description
+-- Prefixes that start a part of a description that isn't your own always-on stats: pets, latents, set bonus
+-- text, day / weather / area conditions... Everything from the first one on is cut off (cut_conditional_stats).
 local conditional_prefixes = {
 	'Pet:', 'Avatar:', 'Wyvern:', 'Automaton:', 'Luopan:', 'Trust:', 'Fellow:', 'Summoned Pet:',
 	'Latent effect:', 'Latent Effect:', 'Unity Ranking:', 'Set:', 'Song effects:', 'Enchantment:', 'Aftermath:',
@@ -142,8 +167,10 @@ local conditional_prefixes = {
 	'All Jumps:', 'Grimoire:', 'Zanshin:', 'Innin:', 'Yonin:', 'Climactic Flourish:', 'Minuet:', 'Depending on day',
 	'Citizens of ', 'Silence:', 'Paralysis:', 'Weather:',
 }
+-- the same as patterns: "Vs. dragons:", "On Lightsdays:", "Rain weather:", "In Dynamis:"...
 local conditional_patterns = {'Vs%. [%a ]+:', 'On [%a ]+days?:', '[%a]+ weather:', 'In [%a]+:', '[%a]+sdays? or [%a]+sdays?:'}
 
+-- Cuts a description at the earliest conditional prefix / pattern above.
 function cut_conditional_stats(text)
 	local cut = nil
 	for _, prefix in ipairs(conditional_prefixes) do
@@ -162,7 +189,9 @@ end
 -- parts of a description, all added together (one Pet DT card). Each part runs until the next prefix.
 local pet_prefixes = {'Pet:', 'Wyvern:', 'Avatar:', 'Automaton:', 'Luopan:'}
 
+-- Returns {['Pet DT'] = n, ['Pet PDT'] = n, ['Pet MDT'] = n, ['Pet Regen'] = n} (only the ones found).
 function pet_damage_taken(text)
+	-- every pet part of the text (from a pet prefix to the next conditional prefix)
 	local found = {}
 	for _, prefix in ipairs(pet_prefixes) do
 		local start = 1
@@ -183,6 +212,7 @@ function pet_damage_taken(text)
 			start = i + #prefix
 		end
 	end
+	-- add up Pet PDT / MDT / DT / Regen from those parts
 	local total = {}
 	local function add(key, v) total[key] = (total[key] or 0) + tonumber(v) end
 	for _, part in ipairs(found) do
@@ -200,10 +230,16 @@ function pet_damage_taken(text)
 	return total
 end
 
+-- The stats in one description (or one augment line): {stat name = number}.
+-- 1. pet parts are read first (pet_damage_taken), 2. names that look alike are renamed so they can't match each
+-- other ("Ranged Accuracy" vs "Accuracy", "Magic Accuracy"...), short forms are written out, 3. the text is cut at
+-- the first conditional part, 4. every name in valid_strings followed by a number is read, 5. temp_key turns the
+-- names into the stat names the rest of InfoGear uses.
 function desypher_description(discription_string, item_t)
 	local pet_dt = pet_damage_taken(discription_string)	-- (v1.12) before the pet parts are cut off
 	
 	-- string that need modifying to stop clashing
+	-- string that need modifying to stop clashing (Ranged / Magic Accuracy would also match "Accuracy")
 	discription_string = string.gsub(discription_string, 'Ranged Accuracy%s?', 'Ranged_accuracy') 
 	discription_string = string.gsub(discription_string, 'Rng.%s?Acc.%s?', 'Ranged_accuracy')  
 	discription_string = string.gsub(discription_string, 'Ranged Attack%s?', 'Ranged_attack') 
@@ -249,6 +285,7 @@ function desypher_description(discription_string, item_t)
 	discription_string = string.gsub(discription_string, '^Eva%.', 'Evasion' )
 	discription_string = string.gsub(discription_string, '([%s/])Eva%.', '%1Evasion' )
 	
+	-- quoted names -> plain names
 	discription_string = string.gsub(discription_string, '\"Magic Atk. Bonus\"', 'Magic Atk. Bonus' )
 	discription_string = string.gsub(discription_string, '\"Mag.%s?Atk.%s?Bns.\"', 'Magic Atk. Bonus' ) 
 	
@@ -258,6 +295,7 @@ function desypher_description(discription_string, item_t)
 	discription_string = string.gsub(discription_string, 'Crit. hit damage', 'Critical hit damage' )
 	discription_string = string.gsub(discription_string, 'Crit. hit rate', 'Critical hit rate' )
 
+	-- damage taken: II first, then the specific kinds, then plain "Damage taken" (D_T so it doesn't match PDT / MDT)
 	discription_string = string.gsub(discription_string, 'Physical [Dd]amage taken II', 'PDT_2' )
 	discription_string = string.gsub(discription_string, 'Physical [Dd]amage taken', 'PDT' )	-- (v1.7) also "Physical Damage taken"
 	discription_string = string.gsub(discription_string, 'Breath damage taken', 'BDT' )
@@ -268,8 +306,10 @@ function desypher_description(discription_string, item_t)
 	discription_string = string.gsub(discription_string, 'Magic dmg. taken', 'MDT' )
 	discription_string = string.gsub(discription_string, 'Damage taken', 'D_T' )
 	
+	-- "Weapon skill DEX" isn't DEX
 	discription_string = string.gsub(discription_string, 'Weapon skill DEX', 'WS_dex' )
 	
+	-- skill names as Windower writes them
 	discription_string = string.gsub(discription_string,  "Great Axe skill",  "Great axe skill")
 	discription_string = string.gsub(discription_string,  "Great Katana skill",  "Great katana skill")
 	discription_string = string.gsub(discription_string,  "Great Sword skill",  "Great sword skill")
@@ -279,6 +319,7 @@ function desypher_description(discription_string, item_t)
 	-- it counts as your own always-on stats. (Before, only six prefixes were checked, and in a fixed order.)
 	discription_string = cut_conditional_stats(discription_string)
 	
+	-- every stat name that is read (as a Lua pattern), followed by an optional ':' and a signed number
 	local valid_strings = L{'Delay','DEF','HP','MP','STR','DEX','VIT','AGI','INT','MND','CHR',
 								'Accuracy','Acc.','Attack','Atk.',
 								'Ranged_accuracy', 'Ranged_attack',
@@ -303,6 +344,7 @@ function desypher_description(discription_string, item_t)
 								}
 	
 	local temp_table = T{}
+	-- name in the text -> stat name used everywhere else
 	local temp_key = { 
 		['Delay'] = 'delay',
 		["Acc."] = "Accuracy",
@@ -347,6 +389,7 @@ function desypher_description(discription_string, item_t)
 	}
 	
 	for k, v in pairs(pet_dt) do temp_table[k] = v end	-- (v1.12)
+	-- read every "<name>+<number>"; if a name appears twice the last one wins
 	for k, v in pairs(valid_strings) do
 		-- v = DEF etc
 		pattern = "("..v.."):?%s?([+-]?%d+)"
@@ -374,6 +417,10 @@ set_bonus_names = {
 	['Cure potency II'] = 'Cure Potency II',
 }
 
+-- Adds up the stats of everything you have on (equipment_table: slot -> item, from check_equipped) plus the
+-- set bonuses that are active, plus the numbers added by hand (//ig ghaste / dw / stp).
+-- Haste is turned into 1/1024ths here (5% -> 51). The main / sub / range / ammo entries hold each weapon slot's
+-- skill name and the skill +N its gear gives (the skill itself is added in build_combined_stats).
 function get_equip_stats(equipment_table)
 
 	local stat_table = { ['Haste'] = 0, ['Slow'] = 0, ['Dual Wield'] = 0, ['Store TP'] = 0, ['Accuracy'] = 0, ['Attack'] = 0, ['Ranged Accuracy'] = 0, ['Ranged Attack'] = 0,
@@ -404,18 +451,22 @@ function get_equip_stats(equipment_table)
 									['main'] = {['skill'] = '', value = 0}, ['sub'] = {['skill'] = '', value = 0}, ['range'] = {['skill'] = '', value = 0}, ['ammo'] = {['skill'] = '', value = 0},
 								}
 								
+	-- weapon skills on a weapon only count for that weapon's slot
 	local melee_skills = L{"Hand-to-Hand skill", "Dagger skill", "Sword skill", "Great Sword skill", "Axe skill", "Great Axe skill", "Scythe skill", "Polearm skill", "Katana skill", "Great Katana skill", "Club skill", "Staff skill"}
 	local ranged_skills = L{"Archery skill", "Marksmanship skill", "Throwing skill"}
 							
+	-- set id -> how many pieces of it you have on
 	local set_bonus = {}
 	
 	if type(equipment_table) ~= 'table' or equipment_table == nil then
 		error('get_equip_stats() function went wrong')
 		return stat_table
 	else	
+		-- every stat of every item
 		for equip_slot, equipped_item in pairs(equipment_table) do
 			for key, value in pairs(equipped_item) do
 				if stat_table[key] then
+					-- a weapon: its skill goes to its slot, its other stats count normally
 					if equipped_item["category"]=="Weapon" then
 						if equipped_item['skill'] then
 							stat_table[equip_slot]['skill'] =  equipped_item['skill']
@@ -437,6 +488,7 @@ function get_equip_stats(equipment_table)
 								stat_table[key] = stat_table[key] + value
 							end
 						end
+					-- armour: every stat counts
 					else
 						if key == 'Haste' then
 							stat_table['Haste'] = stat_table['Haste'] + math.floor(value / 100 * 1024)
@@ -451,9 +503,11 @@ function get_equip_stats(equipment_table)
 							stat_table[key] = stat_table[key] + value
 						end
 					end
+				-- nothing in the main hand = hand-to-hand
 				elseif equip_slot == 'main' and equipped_item.en == '' then
 					stat_table['main']['skill'] = 'Hand-to-Hand'
 				end
+				-- count the pieces of each set (an item can belong to several)
 				if key == "Set Bonus" then
 					if type(value["set id"]) == 'table' then
 						for i, j  in pairs(value["set id"]) do
@@ -474,6 +528,7 @@ function get_equip_stats(equipment_table)
 			end
 		end
 
+		-- set bonuses for the number of pieces on (res/Set_bonus_by_Set_ID.lua)
 		for k, v in pairs(set_bonus) do
 			if v > 1 then
 				if v >= Set_bonus_by_Set_ID[k]["minimum peices"] then
@@ -490,6 +545,7 @@ function get_equip_stats(equipment_table)
 		end
 	end
 	-- table.vprint(stat_table['main'])
+	-- numbers added by hand
 	stat_table['Haste'] = stat_table['Haste'] + manual_ghaste
 	stat_table['Dual Wield'] = stat_table['Dual Wield'] + manual_dw
 	stat_table['Store TP'] = stat_table['Store TP'] + manual_stp
@@ -511,6 +567,7 @@ end
 function build_combined_stats(stat_table)
 	local slot_needs_damage = {main = false, sub = false, range = true, ammo = true}
 	
+	-- each weapon slot's skill: your base skill + skill from gear (ranged / ammo only if they're weapons)
 	for skill_name, value in pairs(player_base_skills) do
 		for slot, needs_damage in pairs(slot_needs_damage) do
 			local slot_skill = stat_table[slot].skill
@@ -521,6 +578,7 @@ function build_combined_stats(stat_table)
 		end
 	end
 	
+	-- base stats (STR, DEX...) from packet 0x061
 	if player.stats then
 		for stat, value in pairs(player.stats) do
 			if stat_table[stat] then 
@@ -533,6 +591,8 @@ function build_combined_stats(stat_table)
 end
 
 -- stat_table must come from build_combined_stats(). This function no longer modifies it.
+-- Accuracy per hand: accuracy from skill + DEX x 0.75 (ranged: AGI x 0.75) + gear + job traits + buffs.
+-- Returns {main, sub, range, ammo} (0 for a slot without a weapon).
 function get_player_acc(stat_table)
 	
 	local Total_acc = {main = 0, sub = 0, range = 0, ammo = 0, dex = 0, agi = 0}
@@ -545,11 +605,13 @@ function get_player_acc(stat_table)
 	
 	Total_acc.main = main_acc_skill + math.floor((stat_table['DEX']+ Buffs_inform['DEX']) * 0.75) + stat_table['Accuracy'] + get_player_acc_from_job() + Buffs_inform['Accuracy']
 
+	-- off hand: only with a second weapon
 	if player.equipment.sub.id ~= 0 and player.equipment.sub.category == 'Weapon' and player.equipment.sub.damage then
 		Total_acc.sub = sub_acc_skill + math.floor((stat_table['DEX']+ Buffs_inform['DEX']) * 0.75) + stat_table['Accuracy'] + get_player_acc_from_job() + Buffs_inform['Accuracy']
 	else
 		Total_acc.sub = 0
 	end
+	-- ranged weapon / ammo that is a weapon (throwing)
 	if player.equipment.range.id ~= 0 and player.equipment.range.category == 'Weapon' and player.equipment.range['damage'] then
 		Total_acc.range = ranged_acc_skill + math.floor((stat_table['AGI']+ Buffs_inform['AGI']) * 0.75) + stat_table['Ranged Accuracy'] + get_player_acc_from_job() + Buffs_inform['Ranged Accuracy']
 	else
@@ -570,6 +632,8 @@ function get_player_acc(stat_table)
 	return Total_acc
 end
 
+-- Attack per hand: 8 + skill + part of STR (two-handed / one-handed main 3/4, hand-to-hand 5/8, off hand 1/2)
+-- + gear + job traits + buffs, then x (1 + Smite + attack % buffs). Smite only for two-handed and hand-to-hand.
 function get_player_att(stat_table)
 	
 	local stat_table = stat_table
@@ -627,6 +691,7 @@ function get_player_att(stat_table)
 	return Total_att
 end
 
+-- Evasion: AGI / 2 + evasion from evasion skill (base + gear) + job traits + gear + buffs.
 function get_player_evasion(stat_table)
 	
 	-- work on a local copy of the one number we change, never on the shared table
@@ -636,6 +701,8 @@ function get_player_evasion(stat_table)
 	return evasion
 end
 
+-- Defense: 3/2 x VIT + a part from your level (the game's formula has steps at 50, 60 and 89), + gear DEF + job
+-- traits + buffs, then x (1 + Defense % buffs, e.g. Barrier bubbles).
 function get_player_defence(stat_table)
 	
 	local stat_table = stat_table
@@ -658,6 +725,7 @@ function get_player_defence(stat_table)
 	return defence
 end
 
+-- BLU: the stats your set spells give (res/Blue_Mage_Spells.lua). 512 = an empty spell slot.
 function get_blue_mage_stats_from_equipped_spells(stat_table)
 
 	local mjob_data = windower.ffxi.get_mjob_data()
@@ -681,11 +749,18 @@ function get_blue_mage_stats_from_equipped_spells(stat_table)
 	return stat_table
 end
 
+-- Works out your skills WITHOUT gear: the game reports skills with gear (packet 0x062), so the skill each
+-- equipped item gives is taken off. The result (player_base_skills) is what build_combined_stats adds gear back on.
+-- Called when the skills packet arrives (Packet_parsing.lua) and when your weapons change (Extras.lua).
 function get_player_skill_in_gear(equip)
 	
-	player_base_skills = player.skills
+	-- (v1.31) work on a COPY of player.skills: taking gear off the game's table itself meant a second call before the
+	-- next player refresh (skills packet + weapon change) took the gear skill off twice
+	player_base_skills = {}
+	for k, v in pairs(player.skills or {}) do player_base_skills[k] = v end
 	
 	-- string.gsub(sub_hand.skill, ' ', '_')
+	-- the skill names Windower uses, and the ones in item descriptions
 	local combat_skills = L{"hand_to_hand", "dagger", "sword", "great_sword", "axe", "great_axe",  "scythe", "polearm", 
 										"katana", "great_katana", "club",  "staff", "archery", "marksmanship" , "throwing","guard","evasion","shield","parrying",}
 	local magic_skills = L{"divine_magic","healing_magic","enhancing_magic","enfeebling_magic","elemental_magic","dark_magic","summoning_magic",
@@ -698,6 +773,8 @@ function get_player_skill_in_gear(equip)
 	
 	if equip then
 		for slot ,item in pairs(equip) do
+			-- weapon slots: only items that aren't real weapons count here (no damage and no item level: grips, some
+			-- ranged / ammo items); a weapon's own skill is handled per slot in get_equip_stats / build_combined_stats
 			if slot == 'main' or slot == 'sub' or slot == 'range' or slot == 'ammo' then
 				if item.category == 'Weapon' then
 					if item.damage == nil then
@@ -729,6 +806,7 @@ function get_player_skill_in_gear(equip)
 						end
 					end
 				end
+			-- armour: every skill +N it gives
 			else
 				for stat_key, value in pairs(item) do
 					if skills:contains(stat_key) then

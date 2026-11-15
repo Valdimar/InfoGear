@@ -1,3 +1,7 @@
+-- res/DW_Gear.lua
+-- Gear whose Dual Wield is written as 'Enhances "Dual Wield" effect' (no number), by item id: the Dual Wield it
+-- gives. Added to the item in Gear_Processing.find_all_values. From GearInfo.
+
 return {
 	[10682] = {id = 10682 , en = "Kog. Chainmail +2" , ["Dual Wield"] = 3 },
 	[10722] = {id = 10722 ,en = "Kog. Hakama +2" , ["Dual Wield"] = 7 },

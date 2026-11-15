@@ -1,3 +1,10 @@
+-- res/Gifts.lua
+-- Job point gifts per job: Gifts[job_points_spent] = {effect = value} unlocked at that many job points spent.
+-- Read by gift_bonus / gifts_total (Job_Traits.lua), which add up every gift at or below your job points.
+-- (Some effect names are misspelled here, e.g. "Double Rate Attack"; Job_Traits.Card_Traits lists both spellings.
+-- A few thresholds are written twice in one job's table, so only the last of those two entries is kept by Lua.)
+-- From GearInfo.
+
 return {
 	['WAR'] = {
 		['Gifts'] = {

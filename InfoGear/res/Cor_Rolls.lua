@@ -1,3 +1,9 @@
+-- res/Cor_Rolls.lua
+-- Phantom Rolls, by job ability id: effect = the stat, roll[n] = the value on a roll of n, bust = the value on a
+-- bust, roll+1 = extra per Phantom Roll +1 the COR has, lucky = the lucky number, bonus = the extra when that job
+-- is in the party (or with the COR's empyrean / relic piece). Companion's Roll (304) has two values per roll.
+-- Used by Action_Processing.lua. From GearInfo.
+
 return {
 	[98]	 ={id=98,   en="Fighter's Roll",		effect="Double Attack",						['bonus']= {equipment={slot='', id=L{},}, ['Main job']='WAR', effect=5}, 		["roll+1"]=1,	bust=-4,		lucky=5,roll={[1]=2,[2]=2,[3]=3,[4]=4,[5]=12,[6]=5,[7]=6,[8]=7,[9]=1,[10]=9,[11]=18,},},
 	[99]  ={id=99,   en="Monk's Roll",		effect="Subtle Blow",						['bonus']= {equipment={slot='', id=L{},}, ['Main job']='MNK', effect=10},		["roll+1"]=4,	bust=-10,	lucky=3,roll={[1]=8,[2]=10,[3]=32,[4]=12,[5]=14,[6]=15,[7]=4,[8]=20,[9]=22,[10]=24,[11]=40,},},

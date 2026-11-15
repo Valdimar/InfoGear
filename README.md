@@ -1,4 +1,4 @@
-# InfoGear v1.30
+# InfoGear v1.31
 
 InfoGear is a patched and restructured fork of **GearInfo** by Sebyg666 (https://github.com/sebyg666/GearInfo),
 based on GearInfo 1.7.2.9. See CHANGES.md in the package for everything that was fixed or changed.
@@ -198,7 +198,8 @@ the only art is `textures/cards/card.png` and `textures/cards/panel.png`.
 * **Ionis, Sanction, Sigil** (v1.27): their stats are added while the effect is on, from `res/Field_Buffs.lua`
   (edit it to change them).
   * **Ionis:** every coalition is taken as fully edified, but BG-Wiki only gives numbers for Couriers' (Accuracy +20,
-    Evasion +20), so those are in. The rest (Pioneers' Attack / MAB, Peacekeepers' DEF / MDB / recovery, Scouts'
+    Evasion +20), so those are in: the Accuracy (with Ranged Accuracy +20 and 3% haste) from the Ionis buff code,
+    the Evasion from the file (v1.31: the Accuracy used to be counted twice). The rest (Pioneers' Attack / MAB, Peacekeepers' DEF / MDB / recovery, Scouts'
     Conserve MP / Fast Cast, Couriers' M.Acc / M.Eva / Crit / haste, Peacekeepers' max HP / MP) are in the file at 0:
     put a number in and it counts.
   * **Sanction / Sigil:** you pick one bonus, which Windower can't see, so tell InfoGear with
@@ -225,6 +226,6 @@ the only art is `textures/cards/card.png` and `textures/cards/panel.png`.
 
   ```
   [InfoGear] Loaded profile layout for Valdimar.
-  [InfoGear] Author: Valdimar @ Phoenix 1.30, based on GearInfo by Sebyg666
+  [InfoGear] Author: Valdimar @ Phoenix 1.31, based on GearInfo by Sebyg666
   ```
 * At the top of `Layouts.lua`: `card_columns` (4, the default for `//ig columns`), `card_caption_size` / `card_value_size` (fonts), `card_order`, `card_caption_colors` and `card_alert` (the over-cap red).

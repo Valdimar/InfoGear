@@ -1,12 +1,25 @@
+-- InfoGear.lua -- the main file Windower loads (//lua l infogear)
+-- InfoGear shows your gear's and buffs' numbers (haste, DT, TP, accuracy, caps...) as cards on screen and sends
+-- haste / Dual Wield needed to Gearswap. This file: the addon's identity, loading every other file, settings per
+-- character, reading your inventory into data/<name>_data.lua, what you have on (check_equipped), the main loop
+-- (prerender) and the Gearswap command.
+--
+-- Files: Statics (shared state, defaults) - Gear_Processing (item stats) - Job_Traits (traits by level) -
+-- Calculator (TP, delay, haste maths) - Buff_Processing / Action_Processing / Packet_parsing (buffs and who cast
+-- them) - Display (the cards' numbers) - Layouts (where the cards go) - Image_processing (drawing) - Extras
+-- (per-job cards, food, field buffs, hover, snapshots, Hit %, cutscenes) - Commands (every //ig command).
+-- res/ holds the data tables (sets, songs, rolls, bubbles, ranked gear, job point gifts...).
+
 _addon.name = 'InfoGear'
 _addon.author = 'Valdimar @ Phoenix'	-- based on GearInfo by Sebyg666
-_addon.version = '1.30'
+_addon.version = '1.31'
 
 -- Raise this whenever the gear parser learns new stats: each character's saved gear is then read again once.
 GEAR_PARSER_VERSION = 8	-- 8: v1.27 SIRD, Conserve MP; 3: v1.11 Unity table; 4: v1.12 pet damage taken; 5: v1.15 pet absorb fix; 6: v1.17 pet regen; 7: v1.18 cape augments
 _addon.commands = {'ig','infogear'}
 
 
+-- Windower libraries
 require('tables')
 require('lists')
 require('strings')
@@ -19,6 +32,7 @@ function log(...)
 end
 require('pack')
 
+-- data tables (res/)
 DW_Gear = require('res/DW_Gear')
 Unity_rank = require('res/Unity_Gear')
 Martial_Arts_Gear = require('res/Martial_Arts_Gear')
@@ -32,11 +46,13 @@ Geo_Spells = require('res/Geo_Spells')
 JSE_Neck_Ranks = require('res/JSE_Neck_Ranks')	-- (v1.10) rank bonuses Windower can't read
 Limbus_Ranks = require('res/Limbus_Ranks')		-- (v1.11) Murky / Alabaster gear, exact per rank
 Limbus_Armor_Ranks = require('res/Limbus_Armor_Ranks')	-- (v1.20) Limbus racial armor and weapons
+-- item id -> rank bonus table, for every kind of ranked gear (check_equipped adds the bonus)
 Ranked_Gear = {}
 for id, entry in pairs(JSE_Neck_Ranks) do Ranked_Gear[id] = entry end
 for id, entry in pairs(Limbus_Ranks) do Ranked_Gear[id] = entry end
 for id, entry in pairs(Limbus_Armor_Ranks) do Ranked_Gear[id] = entry end
 
+-- Windower's resources (items, buffs, spells...) and libraries for extdata (augments), settings files, packets
 res = require('resources')
 skills_from_resources = res.skills
 Extdata = require("extdata")
@@ -49,6 +65,7 @@ bit = require('bit')
 chat = require('chat')
 chars = require('chat.chars')
 
+-- InfoGear's own files (the order matters: later files use what earlier ones define)
 require 'Statics'
 require 'Gear_Processing'
 require 'Job_Traits'
@@ -74,6 +91,8 @@ function load_echo(character_name)
 	say('Author: ' .. _addon.author .. ' ' .. _addon.version .. ', based on GearInfo by Sebyg666')
 end
 
+-- Loading in game: load this character's settings and gear; //ig reload saved your party and buffs to two
+-- temp files first, read back here so nothing is lost.
 windower.register_event('load', function()
 	if not windower.ffxi.get_player() then load_echo() end	-- at the login screen: no profile yet
 	if windower.ffxi.get_player() then
@@ -104,6 +123,7 @@ windower.register_event('load', function()
 	end
 end)
 
+-- Logging out: forget the character (logging in again reloads the addon)
 windower.register_event('logout', function()
 	
 	player = {}
@@ -118,10 +138,14 @@ windower.register_event('logout', function()
 	
 end)
 
+-- Logging in: reload, so the new character's settings and gear are loaded
 windower.register_event('login',function ()
 	windower.send_command('lua r infogear;')
 end)
 
+-- Per character: settings (data/<name>_settings.xml, missing entries from defaults), the panel, the party,
+-- the saved gear (data/<name>_data.lua; read once from your bags if it doesn't exist or an older parser made it),
+-- then every packet handler once (stats, skills, buffs).
 function options_load()
 	
 	if windower.ffxi.get_player() then
@@ -178,6 +202,7 @@ windower.register_event('addon command', function(...)
 	if settings and player and player.main_job then job_presets_store() end
 end)
 
+-- Writes every known item with its stats to data/<name>_data.lua.
 function save_table_to_file(item_table)
 
 	local new_item = item_table
@@ -188,6 +213,7 @@ function save_table_to_file(item_table)
 	notice('File Saved')
 end
 
+-- Reads data/<name>_data.lua back.
 function get_equipment_from_file()
 
 	local f = io.open(windower.addon_path..'data/'..player.name..'_data.lua','r')
@@ -198,6 +224,7 @@ function get_equipment_from_file()
 	return t
 end
 
+-- Reads every item in every bag (//ig parse, first login, parser updates) and saves them.
 function parse_inventory()
 	
 	local items_in_bag = T{}
@@ -222,6 +249,7 @@ function parse_inventory()
 	save_table_to_file(full_gear_table_from_file)
 end
 
+-- An item that isn't in the saved file yet (new or re-augmented): read it and add it.
 function parse_new_single_item(item)
 
 	if item ~= nil and type(item) == 'table' then
@@ -257,6 +285,7 @@ function ranked_item_rank(ext, max_rank)
 	return rank
 end
 
+-- The copy with the bonus for its rank: exact per-rank tables (Limbus) or max-rank values scaled (JSE necks).
 function with_rank_bonus(item, ranked, ext)
 	local rank = ranked_item_rank(ext, ranked.max_rank)
 	local copy = {}
@@ -313,10 +342,13 @@ function why_command(args)
 	log('  total from gear: ' .. table.concat(t, ', ') .. '  (set bonuses not listed per item)')
 end
 
+-- What you have on, slot by slot, as saved items with their stats (matched by id and, for augmented items, by
+-- augments); unknown items are read on the spot; ranked gear gets its rank bonus. Sets player.equipment.
 function check_equipped()
 
 	local new_gear_table = T{}
 	local local_gear_table = T{}
+	-- slot -> {inventory slot, bag}
 	local items_equipped = windower.ffxi.get_items().equipment
 	
 	local default_slot = T{'sub','range','ammo','head','body','hands','legs','feet','neck','waist', 'left_ear', 'right_ear', 'left_ring', 'right_ring','back'}
@@ -333,6 +365,7 @@ function check_equipped()
 		end
 	end
 	
+	-- each slot's item from its bag (an empty slot gets a blank item)
 	for k,v in pairs(items_equipped) do
 		if v.slot == 0 then
 			new_gear_table[k] = {count = 0 ,status = 0,id = 0,slot = 0,bazaar = 0,extdata = ''}
@@ -348,6 +381,7 @@ function check_equipped()
 			local no_match = true
 			local temp_item = new_gear_table[k]
 
+			-- find it in the saved items; with augments, all augment lines must match
 			for x,y in pairs(full_gear_table_from_file) do
 				if v.id == y.id then
 					if type(item_has_augment.augments) == 'table' and table.length(item_has_augment.augments) > 0 then
@@ -378,6 +412,7 @@ function check_equipped()
 				end	
 			end
 
+			-- not saved yet: read it now
 			if no_match == true then
 
 				local_gear_table[#local_gear_table+1] = parse_new_single_item(temp_item)
@@ -411,6 +446,7 @@ end
     -- --initialize(text_box,settings)
 -- end)
 
+-- Packets to the handlers in Packet_parsing.lua (parse.i / parse.o)
 function incoming_chunk(id,data,modified,injected,blocked)
         
     if not injected and parse.i[id] then
@@ -429,6 +465,9 @@ end
 
 -- update() now lives in Display.lua
 
+-- The main loop: every 2 frames the card texts are centred (their width is only known once drawn); every 15
+-- frames (about 4 times a second), or right after a weapon change, everything is worked out again: player,
+-- movement, buffs, party, totals, then update() (Display.lua) draws the cards.
 loop_count = 0
 frame_count = 0
 windower.register_event('prerender',function()
@@ -456,9 +495,11 @@ windower.register_event('prerender',function()
     frame_count = frame_count + 1
 end)
 
+-- packets in / out
 windower.register_event('incoming chunk',incoming_chunk)
 windower.register_event('outgoing chunk',outgoing_chunk)
 
+-- With roll chat messages on (//ig cor msgs), the game's / Battlemod's own roll lines are hidden (InfoGear writes its own)
 windower.register_event('incoming text', function(old, new, color)
     --Hides Battlemod
 	if settings.player.show_COR_messages then
@@ -490,6 +531,8 @@ local last_gs_command = nil
 local gs_calls_since_send = 0
 local GS_HEARTBEAT_CALLS = 20
 
+-- Tells Gearswap: "gs c gearinfo <DW needed | false> <total haste> <moving> <hand-to-hand | MA needed>".
+-- Gearswap files read it in their self_command. force = send now (//ig update).
 function update_gs(DW, Total_DW_needed, haste, MA, MA_needed, force)
 	local command
 	if DW == true then
@@ -512,6 +555,7 @@ function update_gs(DW, Total_DW_needed, haste, MA, MA_needed, force)
 	windower.send_command(command)
 end
 
+-- Unloading: nothing to clean up (Windower removes an addon's images and texts itself)
 windower.register_event('unload', function()
 
 end)

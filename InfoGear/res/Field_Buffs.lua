@@ -9,8 +9,8 @@
 	Critical hit rate, Fast Cast, Conserve MP, Store TP, Regen, Refresh, Regain, HP, MP...
 
 	Ionis: every coalition is taken as fully edified (both edifications). Only the numbers BG-Wiki gives are filled
-	in (Couriers' Coalition, Moderate: Accuracy +20, Evasion +20). The others are listed with 0 until their values
-	are known: put the number in and it counts.
+	in (Couriers' Coalition, Moderate: Evasion +20; its Accuracy +20 comes from the buff code). The others are listed
+	with 0 until their values are known: put the number in and it counts.
 
 	Sanction and Sigil: you pick ONE extra bonus (Regen, Refresh or food duration), which Windower can't see. Tell
 	InfoGear with //ig sanction regen|refresh|food and //ig sigil regen|refresh|food. (v1.29) Each counts only while
@@ -23,12 +23,14 @@
 ]]
 return {
 	[512] = {name = 'Ionis', stats = {
-		['Accuracy'] = 20,				-- Couriers': Coalition Flag + Adoulinian Flag (BG-Wiki: +20 at Moderate)
+		-- (v1.31) Accuracy / Ranged Accuracy +20 and the small haste (3%) are already given by the buff code
+		-- (Buff_Processing.lua, Ionis in Adoulin zones), so they're 0 here; they used to be counted twice.
+		['Accuracy'] = 0,				-- Couriers': Coalition Flag + Adoulinian Flag (BG-Wiki: +20 at Moderate)
 		['Magic Accuracy'] = 0,			-- Couriers': same edifications, value unreadable on BG-Wiki
 		['Evasion'] = 20,				-- Couriers': Signboard + Main Terrace (BG-Wiki: +20 at Moderate)
 		['Magic Evasion'] = 0,			-- Couriers': same edifications, value unreadable on BG-Wiki
 		['Critical hit rate'] = 0,		-- Couriers': Emblem + Bay Roof
-		['Haste'] = 0,					-- Couriers': "minor haste effect" (in %, like gear Haste)
+		['Haste'] = 0,					-- Couriers': "minor haste effect": 3% in the buff code already
 		['Attack'] = 0,					-- Pioneers': Coalition Flag
 		['Magic Atk. Bonus'] = 0,		-- Pioneers': Signboard
 		['DEF'] = 0,					-- Peacekeepers': Coalition Flag

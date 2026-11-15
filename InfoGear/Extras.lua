@@ -15,8 +15,10 @@
 
 Field_Buffs = require('res/Field_Buffs')
 
+-- chat line: [InfoGear] text
 local function say(text) windower.add_to_chat(207, '[' .. _addon.name .. '] ' .. text) end
 
+-- whether you have this buff id (player.buffs from the game)
 local function has_buff(id)
 	for _, b in pairs((player and player.buffs) or {}) do
 		if b == id then return true end
@@ -45,10 +47,12 @@ local function serialize(v, indent)
 	end
 end
 
+-- data/<character><suffix>, e.g. data/Valdimar_jobs.lua
 local function data_path(suffix)
 	return windower.addon_path .. 'data/' .. player.name .. suffix
 end
 
+-- reads a 'return {...}' file back as a table ({} if missing or broken)
 local function read_table(path)
 	local f = io.open(path, 'r')
 	if not f then return {} end
@@ -60,6 +64,7 @@ local function read_table(path)
 	return (ok and type(t) == 'table') and t or {}
 end
 
+-- writes a table as a 'return {...}' file
 local function write_table(path, t)
 	local f = io.open(path, 'w')
 	if not f then return end
@@ -67,6 +72,7 @@ local function write_table(path, t)
 	f:close()
 end
 
+-- "Accuracy +20, Evasion +20" from a stat table (for chat)
 local function stats_text(stats)
 	local keys, parts = {}, {}
 	for k in pairs(stats) do keys[#keys + 1] = k end
@@ -128,6 +134,7 @@ function note_total(stat, value)
 	if value and value > 0 then food_totals[stat] = value end
 end
 
+-- your stat before food: the last total minus what the food added last time
 local function food_base(stat)
 	local total
 	if stat == 'HP' then total = player and player.vitals and tonumber(player.vitals.max_hp)
@@ -160,6 +167,7 @@ local function food_now()
 	return stats, notes
 end
 
+-- starts counting this food (remembered in the settings so a reload keeps it)
 local function set_food(id, quiet)
 	local stats, pct
 	if id then stats, pct = food_stats(id) end
@@ -174,6 +182,7 @@ local function set_food(id, quiet)
 	return true
 end
 
+-- stops counting food
 local function clear_food()
 	food = nil
 	food_candidate = nil
@@ -193,6 +202,8 @@ windower.register_event('action', function(act)
 	end
 end)
 
+-- Keeps the food in step with the Food effect: restores it after a reload, confirms a food that was just
+-- used once the effect appears, and clears it when the effect wears off.
 local function food_check()
 	local active = has_buff(FOOD_BUFF)
 	if not food and not food_candidate and tonumber(settings.player.food_id) and tonumber(settings.player.food_id) > 0 then
@@ -216,6 +227,7 @@ end
 -------------------------------------------------------------------------------------------------------------
 local field_warned = {}
 
+-- the Ionis / Sanction / Sigil / Signet stats that apply now, as {name, stats} sources
 local function field_buff_sources()
 	local out = {}
 	for id, fb in pairs(Field_Buffs) do
@@ -254,6 +266,7 @@ end
 -------------------------------------------------------------------------------------------------------------
 extra_sources = {}
 
+-- Adds food and field buffs into the gear totals (Gear_info); keeps them in extra_sources for the hover box.
 function add_extra_sources(stat_table)
 	food_check()
 	extra_sources = {}
@@ -281,6 +294,7 @@ local SHOW_KEYS = {'show_total_haste', 'show_dt_Stuff', 'show_tp_Stuff', 'show_a
 	'show_Evasion', 'show_Defence', 'show_STP', 'show_speed', 'show_DW_Stuff', 'show_MA_Stuff'}
 local job_presets, preset_job = nil, nil
 
+-- which cards are on now (main and extra)
 local function current_toggles()
 	local t = {cards = {}}
 	for _, k in ipairs(SHOW_KEYS) do t[k] = settings.player[k] == true end
@@ -289,6 +303,7 @@ local function current_toggles()
 	return t
 end
 
+-- turns cards on / off as saved
 local function apply_toggles(t)
 	for _, k in ipairs(SHOW_KEYS) do
 		if t[k] ~= nil then settings.player[k] = t[k] end
@@ -299,8 +314,10 @@ local function apply_toggles(t)
 	end
 end
 
+-- //ig jobcards (on unless turned off)
 local function job_cards_on() return settings.player.job_cards ~= false end
 
+-- Main job changed (or first update): show that job's saved cards, or save the current cards for a new job.
 function job_presets_check()
 	if not job_cards_on() then return end
 	local job = player and player.main_job
@@ -383,13 +400,17 @@ for _, c in ipairs(extra_cards or {}) do
 	end
 end
 
+-- +12 / -3 / +1.5
 local function fmt(v)
 	if v == math.floor(v) then return (v >= 0 and '+' or '') .. string.format('%d', v) end
 	return (v >= 0 and '+' or '') .. string.format('%.1f', v)
 end
 
+-- 1/1024ths as a percent: 307 -> +30.0%
 local function haste_pct(v) return string.format('%+.1f%%', v / 1024 * 100) end
 
+-- The hover box's lines for a card: its value, then each equipped item that adds to it, food / field buffs,
+-- set bonuses (what's left of the gear total), buffs (with the caster), job traits / merits / job points and a note.
 function card_breakdown(idx)
 	local b = sections.block[idx]
 	if idx == 63 and b then	-- (v1.29) Hit %
@@ -480,11 +501,13 @@ local TIP = 'InfoGear_hover_box'
 local tip_shown, hover_idx, tip_mx, tip_my = false, nil, 0, 0
 local tip_lines = {''}
 
+-- removes the hover box
 local function hide_tip()
 	if tip_shown then windower.text.delete(TIP) end
 	tip_shown, hover_idx = false, nil
 end
 
+-- puts the box next to the mouse, on screen (to the left / above when there's no room)
 local function place_tip(lines)
 	local longest = 0
 	for _, l in ipairs(lines) do if #l > longest then longest = #l end end
@@ -498,6 +521,7 @@ local function place_tip(lines)
 	windower.text.set_location(TIP, x, y)
 end
 
+-- opens the box for a card (made again so it's drawn on top of the cards)
 local function show_tip(idx)
 	local lines = card_breakdown(idx)
 	if not lines then hide_tip() return end
@@ -516,6 +540,7 @@ local function show_tip(idx)
 	tip_shown, hover_idx = true, idx
 end
 
+-- Called by update(): refreshes an open box with the new numbers.
 function hover_refresh()
 	if not tip_shown or not hover_idx then return end
 	if settings.player.hover == false or not sections.block[hover_idx] then hide_tip() return end
@@ -525,6 +550,7 @@ function hover_refresh()
 	windower.text.set_text(TIP, table.concat(lines, '\n'))
 end
 
+-- mouse moves: open / move / close the hover box (not while dragging, hidden or turned off)
 windower.register_event('mouse', function(type, x, y, delta, blocked)
 	if type ~= 0 then return end
 	if blocked or settings == nil or settings.player.hover == false or (is_dragging and is_dragging()) then
@@ -550,6 +576,7 @@ end)
 -------------------------------------------------------------------------------------------------------------
 local snap_labels = {[25] = 'DW Needed', [27] = 'MA Needed'}
 
+-- Every card's value now: the cards on screen as shown, plus every extra card worked out even if hidden.
 function snapshot_values()
 	local t = {}
 	for idx, b in pairs(sections.block or {}) do
@@ -564,9 +591,11 @@ function snapshot_values()
 	return t
 end
 
+-- the saved snapshots (data/<name>_snaps.lua)
 local function snaps_load() return read_table(data_path('_snaps.lua')) end
 local function snaps_save(t) write_table(data_path('_snaps.lua'), t) end
 
+-- //ig snap <name> | //ig snap del <name>
 local function snap_command(args)
 	local name = args[1] and tostring(args[1]):lower()
 	if not name then say('Use //ig snap <name> (e.g. //ig snap tp), then //ig diff <name>.') return end
@@ -585,12 +614,14 @@ local function snap_command(args)
 	say('Saved snapshot "' .. name .. '" (' .. n .. ' values). //ig diff ' .. name .. ' compares with it.')
 end
 
+-- "+18%" / 1312 -> number; nil for text like "34/25"
 local function to_num(v)
 	if type(v) == 'number' then return v end
 	if type(v) == 'string' and v:match('^[+-]?[%d%.]+%%?$') then return tonumber((v:gsub('%%', ''))) end
 	return nil
 end
 
+-- //ig diff <name>: lists every card whose value changed since the snapshot
 local function diff_command(args)
 	local name = args[1] and tostring(args[1]):lower()
 	local snaps = snaps_load()
@@ -618,6 +649,7 @@ local function diff_command(args)
 	for _, line in ipairs(changes) do windower.add_to_chat(207, '  ' .. line) end
 end
 
+-- //ig snaps
 local function snaps_command()
 	local snaps = snaps_load()
 	local names = {}
@@ -719,6 +751,7 @@ end
 -------------------------------------------------------------------------------------------------------------
 local last_weapons = nil
 
+-- called by update() with what you have on
 function weapon_check(equip)
 	if type(equip) ~= 'table' then return end
 	local function id_of(slot) return (equip[slot] and equip[slot].id) or 0 end
@@ -750,11 +783,13 @@ end
 -- name (saved in data/<name>_mobs.lua), and /check gives its level. Until then the card shows "--".
 -------------------------------------------------------------------------------------------------------------
 local mob_data = nil		-- [monster name] = {eva = n, level = n}
+-- the saved monster evasion / levels, read once
 local function mobs() if not mob_data then mob_data = read_table(data_path('_mobs.lua')) end return mob_data end
 
 local TWO_HANDED = {['Great Sword'] = true, ['Great Axe'] = true, ['Scythe'] = true, ['Polearm'] = true,
 	['Great Katana'] = true, ['Staff'] = true}
 
+-- your target, if it's a monster
 local function current_target()
 	local t = windower.ffxi.get_mob_by_target('t')
 	if t and t.is_npc and t.spawn_type == 16 then return t end	-- 16 = monster
@@ -796,6 +831,7 @@ function hit_rate()
 	return hit .. '%', hit < 80, lines
 end
 
+-- //ig eva [number]: show / set the evasion for monsters with your target's name
 function hit_eva_command(args)
 	local t = current_target()
 	local v = args[1] and tonumber(args[1])

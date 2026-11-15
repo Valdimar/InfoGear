@@ -1,3 +1,8 @@
+-- res/Blue_Mage_Spells.lua
+-- Blue Mage spells, by spell id: level, set cost, trait (the job trait it counts toward) and points (8 points = one
+-- rank of that trait), and the stats setting it gives (HP, MP, STR...). Used by the BLU trait and stat code
+-- (Job_Traits.blu_trait_rank, Gear_Processing.get_blue_mage_stats_from_equipped_spells). From GearInfo.
+
 return {
 	[513]={id=513,en="Venom Shell",level=42,cost=3,points=4,trait="Clear Mind",["HP"]=0, ["MP"]=0, ["MND"]=2, ["AGI"]=0, ["INT"]=0, ["CHR"]=0, ["STR"]=0, ["VIT"]=0, ["DEX"]=0,},
 	[515]={id=515,en="Maelstrom",level=61,cost=5,points=4,trait="Clear Mind",["HP"]=0, ["MP"]=0, ["MND"]=2, ["AGI"]=0, ["INT"]=0, ["CHR"]=0, ["STR"]=0, ["VIT"]=0, ["DEX"]=0,},

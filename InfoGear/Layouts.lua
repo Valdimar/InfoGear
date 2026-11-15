@@ -1,14 +1,16 @@
 --[[
 	Layouts.lua
 
-	Where the widgets go on screen: flat dark cards, 4 across, each a small coloured caption over a big bold number,
-	on a plain dark panel. Drawn only with textures/cards/card.png and textures/cards/panel.png.
+	Where the widgets go on screen: flat dark cards, 4 / 5 / 6 across (//ig columns), each a small coloured caption
+	over a big bold number, on a plain dark panel. Drawn only with textures/cards/card.png and panel.png.
+	Also here: the card groups and their order, the extra cards' list, the caption colours and the card sizes.
 
 	layout_plan() gets the list of blocks that currently exist and returns a "plan": a rectangle for every block,
 	relative to the panel's top-left corner. Image_processing.lua applies it. Which widgets exist is still decided
 	by the //ig show ... toggles. //ig scale <0.5-2> resizes everything.
 ]]
 
+-- rounding to whole pixels
 local floor = math.floor
 local function R(v) return floor(v + 0.5) end
 
@@ -22,7 +24,8 @@ card_columns = 4	-- the default; each character can pick 4, 5 or 6 with //ig col
 -- of the next, never anything from further back). Inside a section a group that fits in a row is never split over
 -- two rows; a small group may fill a gap left earlier in the SAME section; a group wider than the row wraps from
 -- the start of a row. So the panel reads haste -> defence -> melee -> ranged -> magic -> recovery -> pet -> misc at
--- 4, 5 or 6 columns. Block numbers are from Display.lua (31-62 = the extra cards, see extra_cards below).
+-- 4, 5 or 6 columns. Block numbers are from Display.lua (31-63 = the extra cards, see extra_cards below).
+-- fill = true: a single card that can go in the lowest gap anywhere (Speed, TH).
 card_groups = {
 	-- attack speed: haste, then what it changes (Dual Wield / Martial Arts needed for the delay cap)
 	{key = 'haste',   section = 'speed',    blocks = {1, 2, 3, 4}},		-- Gear.H, Magic.H, JA.H, Total.H
@@ -58,10 +61,13 @@ card_groups = {
 	{key = 'speed',   section = 'misc',     blocks = {30}, fill = true},	-- Speed
 	{key = 'th',      section = 'misc',     blocks = {58}, fill = true},	-- TH
 }
-card_last = 29	-- UGS: last row if there's room, else the first gap
+card_last = 29	-- UGS: always placed last, in the lowest row with room (else a row of its own)
 
--- (v1.7) Extra stat cards. Each is turned on with //ig show <key> or a whole group with //ig show <group>; all
--- start off. Values and caps are in Display.lua (extra_card_values).
+-- (v1.7) Extra stat cards. Each is turned on with //ig show <key> or a whole group with //ig show <group>; they
+-- start off except the recovery group. Values and caps are in Display.lua (extra_card_values).
+-- extra_card_groups are the //ig show groups (title = what //ig cards / the README say about them; color is from
+-- before v1.28 and no longer used: captions take their section's colour). extra_cards: idx = block number,
+-- key = //ig show name, group = which //ig show group, label = the card's caption.
 extra_card_groups = {
 	{key = 'melee',  title = 'multi-attack, crit, Subtle Blow, WSD, PDL, Hit % against your target', color = {245, 170, 90}},
 	{key = 'ranged', title = 'Snapshot, Rapid Shot',                        color = {130, 215, 150}},
@@ -135,10 +141,12 @@ card_caption_colors = {
 	[51] = {226, 220, 196}, [52] = {226, 220, 196}, [61] = {226, 220, 196},
 	[30] = {140, 190, 245},	-- Speed blue
 }
+-- block number -> its section (for the caption colour)
 local block_section = {}
 for _, g in ipairs(card_groups) do
 	for _, idx in ipairs(g.blocks) do block_section[idx] = g.section end
 end
+-- the colour of a number over its cap
 card_alert = {240, 110, 95}
 
 -- sizes at scale 1: 4 cards of 54 x 38 px make a 228 px wide panel, the same width as the original display
@@ -149,6 +157,7 @@ card_sizes = {
 	small  = {w = 44, h = 30, gap = 2, pad = 3, caption = 6, value = 9,  caption_y = 0.07, value_y = 0.40},
 }
 
+-- (v1.14) the card size for this character: its name and its card_sizes entry
 function layout_current_size()
 	local name = settings and settings.display and settings.display.size
 	name = type(name) == 'string' and name:lower() or 'normal'
@@ -171,6 +180,7 @@ function layout_current_columns()
 	return c
 end
 
+-- (v1.6) //ig scale for this character, 0.5 to 2
 function layout_current_scale()
 	local s = tonumber(settings and settings.display and settings.display.scale) or 1
 	if s < 0.5 then s = 0.5 elseif s > 2 then s = 2 end
@@ -183,9 +193,10 @@ local function rect(x, y, w, h)
 	return {x = x0, y = y0, w = R(x + w) - x0, h = R(y + h) - y0}
 end
 
--- (v1.9) Packs the present blocks of each group into rows of `columns`. Returns a list of rows, each a list of
--- block numbers, left to right.
+-- Packs the present blocks into rows of `columns`, group by group and section by section (see card_groups above).
+-- Returns a list of rows, each a list of block numbers, left to right.
 function layout_rows(present, columns)
+	-- the groups with the blocks that exist (each block in one group only); blocks in no group go last
 	local has, used = {}, {}
 	for _, idx in ipairs(present) do has[idx] = true end
 	local groups = {}
@@ -249,6 +260,7 @@ function layout_rows(present, columns)
 		return rs
 	end
 
+	-- section by section
 	local rows = {}
 	local i = 1
 	while i <= #groups do
@@ -274,7 +286,8 @@ function layout_rows(present, columns)
 	return rows
 end
 
--- `present`: sorted list of existing block numbers.
+-- The plan for the blocks that exist (`present`: sorted list of block numbers): a rectangle per block relative to
+-- the panel's corner, the panel's size, font sizes and where the texts sit. Image_processing.check_positions uses it.
 function layout_plan(present, scale)
 	local s = scale or layout_current_scale()
 	local _, size = layout_current_size()
@@ -318,6 +331,7 @@ function size_command(args)
 end
 
 -- (v1.8) //ig columns [4|5|6]
+-- (v1.8) //ig columns [4|5|6]
 function columns_command(args)
 	local n = tonumber(args[1])
 	if not n then
@@ -335,6 +349,7 @@ function columns_command(args)
 	log('Columns: ' .. n .. '.')
 end
 
+-- (v1.6) //ig scale [0.5-2]
 function scale_command(args)
 	local n = tonumber(args[1])
 	if not n then

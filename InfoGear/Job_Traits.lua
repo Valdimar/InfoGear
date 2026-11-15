@@ -71,6 +71,8 @@ end
 ----------------------------------------------------------------------------------------------------------
 -- Accuracy / Evasion / Attack / Defense bonuses from the main and sub job
 ----------------------------------------------------------------------------------------------------------
+-- Each stat: gift = the job point gift that adds to it, blu_trait = the Blue Mage trait name, blu = value per
+-- Blue Mage trait rank, main / sub = ladders per job (sub job ladders stop at the sub job's level cap).
 Job_Traits = {
 	acc = {
 		gift = 'Physical Accuracy Bonus', blu_trait = 'Accuracy',
@@ -131,6 +133,7 @@ Job_Traits = {
 	},
 }
 
+-- The trait value for one stat (one entry of Job_Traits above) for your current main / sub job.
 local function job_trait_bonus(t)
 	local sub_value = 0
 	if player.sub_job then
@@ -148,6 +151,7 @@ local function job_trait_bonus(t)
 	return math.max(sub_value, main_value) + gift_bonus(t.gift)
 end
 
+-- Used by Calculator / Display for the Acc, Eva, Att and Def cards
 function get_player_acc_from_job() return job_trait_bonus(Job_Traits.acc) end
 function get_player_eva_from_job() return job_trait_bonus(Job_Traits.eva) end
 function get_player_att_from_job() return job_trait_bonus(Job_Traits.att) end
@@ -172,6 +176,7 @@ Smite_Ladders = {
 	},
 }
 
+-- Smite: the higher of main / sub job (Display uses it for two-handed / hand-to-hand attack)
 function get_smite()
 	local sub_value = 0
 	if player.sub_job then
@@ -191,6 +196,7 @@ Store_TP_Ladders = {
 	blu  = {[1] = 10, [2] = 15, [3] = 20, [4] = 25, [5] = 30},
 }
 
+-- Store TP from job traits: the higher of main / sub job (BLU: from set spells)
 function determine_stp()
 	local sub_job_tp = 0
 	if player.sub_job then
@@ -220,6 +226,7 @@ Dual_Wield_Ladders = {
 	blu = {[1] = 10, [2] = 15, [3] = 25, [4] = 30, [5] = 35, [6] = 40},
 }
 
+-- Dual Wield from job traits (BLU: from set spells); the sub job's value is flat
 function determine_DW()
 	local sub_job_dw = 0
 	if player.sub_job then
@@ -307,11 +314,13 @@ Card_Traits = {
 	sird = {name = 'Spell interruption', merit = {key = 'spell_interruption_rate', per = 2}},
 }
 
+-- job points spent on the main job (0 if Windower hasn't got them)
 local function safe_jp()
 	local ok, jp = pcall(job_points_spent)
 	return (ok and tonumber(jp)) or 0
 end
 
+-- the sum of these gift effects unlocked at your job points (main job)
 local function gifts_total(names)
 	local job = player and player.main_job
 	local g = job and Gifts[job] and Gifts[job]['Gifts']
@@ -358,6 +367,7 @@ function card_trait_parts(key)
 	return parts, total
 end
 
+-- just the total (Display.lua's T())
 function card_trait_total(key)
 	local _, total = card_trait_parts(key)
 	return total

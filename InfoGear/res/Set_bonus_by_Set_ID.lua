@@ -1,3 +1,7 @@
+-- res/Set_bonus_by_Set_ID.lua (generated, from GearInfo)
+-- Gear sets, by set id: the items in the set (by item id), "minimum peices" = pieces needed for any bonus, and
+-- ["bonus"][n] = {stat = value} with n pieces on. Used by Gear_Processing.get_equip_stats.
+
 return {
     [2]={
         [11073]={

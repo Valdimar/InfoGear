@@ -1,3 +1,10 @@
+-- Buff_Processing.lua
+-- Works out what each of your buffs gives you. _ExtraData.player.buff_details has one entry per buff you have
+-- (made by Packet_parsing / Action_Processing, with the caster, song / roll value etc.). check_buffs() writes the
+-- stats each buff gives into its entry (ma_haste, Accuracy, Regen...), calculate_total_haste() adds all entries up
+-- into Buffs_inform. Haste values are in 1/1024ths (307 = 30%).
+
+-- h_spikes: Haste Samba is up (set by Action_Processing when the samba lands)
 buff_info = {h_spikes = false }
 
 --[[ Swordplay: +3 accuracy and evasion when used, +3 per tick, up to +60 (BG-Wiki). Futhark Mitons worn when it is
@@ -8,6 +15,7 @@ swordplay_tick_seconds = 3
 local swordplay_mitons = {['futhark mitons'] = 3, ['futhark mitons +1'] = 5, ['futhark mitons +2'] = 7, ['futhark mitons +3'] = 9}
 local swordplay = nil	-- {start = os.time(), ticks = starting ticks} while Swordplay is on
 
+-- Swordplay's current Accuracy / Evasion bonus (starts counting when the buff is first seen)
 function swordplay_bonus()
 	if not swordplay then
 		local hands = player.equipment and player.equipment.hands and player.equipment.hands.en or ''
@@ -24,9 +32,12 @@ recovery_spell_potency = {
 	['Regen IV'] = {'Regen', 30}, ['Regen V'] = {'Regen', 40},
 	['Refresh'] = {'Refresh', 3}, ['Refresh II'] = {'Refresh', 6}, ['Refresh III'] = {'Refresh', 9},
 }
+-- 'Regen' / 'Refresh' -> the per-tick value of the last such spell cast on you (Action_Processing.lua)
 last_recovery_spell = {}
 
+-- Writes into each buff's entry in _ExtraData.player.buff_details what it gives you. Runs every update.
 function check_buffs()
+	-- Swordplay gone: start over next time
 	local has_swordplay = false
 	for _, b in pairs(_ExtraData.player.buff_details) do
 		if b.id == 532 then has_swordplay = true break end
@@ -50,6 +61,9 @@ function check_buffs()
 		end
 	end
 	
+	-- duplicate_id: a GEO bubble already counted (two buffs with the same id can't both take it)
+	-- Ionis_zones: Adoulin zones, where Ionis gives its haste / accuracy (this part is old GearInfo code)
+	-- marches: March spell id -> buff value (not used below, kept from GearInfo)
 	local duplicate_id = {}
 	local Ionis_zones = S{256,257,258,259,260,261,262,263,264,265,266,267,268,269,270,271,272,273,274,275,276,277,281,282,283,284,285,}
 	local marches = {417, 419, 420}
@@ -60,9 +74,11 @@ function check_buffs()
 	local song_found = false
 	local song_found2 = false
 	
+	-- every buff you have
 	for index, buff in pairs(_ExtraData.player.buff_details) do
 		--print(buff.name, buff['full_name'] or '')
 		local this_buff = _ExtraData.player.buff_details[index]
+		-- debuffs that slow you: weakness, slow, Indi- / Geo-Slow, elegy
 		if buff.id == 1 then -- weakness
 			this_buff['ma_haste'] = -1024
 		end
@@ -79,6 +95,7 @@ function check_buffs()
 		if buff.id == 194 then -- elegy
 			this_buff['ma_haste'] = -512
 		end
+		-- WAR's Aggressor (+ Aggressive Aim merits / augmented Agoge body)
 		if buff.id == 58 then -- Aggressor
 			this_buff['Accuracy'] = 25
 			this_buff['Evasion'] = -25
@@ -108,6 +125,7 @@ function check_buffs()
 			this_buff['Accuracy'] = 20
 			this_buff['Ranged Accuracy'] = 20
 		end
+		-- job abilities with haste: Last Resort (by DRK level / merits), Hasso (+ SAM gear), and spells: Mighty Guard, Embrava, Haste / Haste II, Utsusemi-type
 		if buff.id == 64 then -- last resort
 			if player.main_job:upper() == 'DRK' and player.main_job_level == 99 then
 				this_buff['ja_haste'] = math.ceil(((player.merits.desperate_blows * 2) + 15)/100*1024)
@@ -163,6 +181,7 @@ function check_buffs()
 			this_buff['Store TP'] = 10
 		end
 		
+		-- GEO bubbles: the Trust GEOs' Indi- spells (fixed values), then party GEOs' Indi- (within 6.5 yalms) and Geo- (luopan within 6)
 		local trust_names = L{"Cornelia", 'Kupofried', 'Brygid', 'KuyinHathdenna', 'Moogle', 'Sakura', 'StarSibyl'}
 		
 		for member_name, v in pairs(member_table) do
@@ -200,6 +219,7 @@ function check_buffs()
 					duplicate_id[v.indi.id] = true
 					break
 				end
+			-- a party GEO's Indi- bubble: base value at 900 skill + their Geomancy +# (from your list or //ig geo), x Bolster etc.
 			elseif v.mob.distance:sqrt() < 6.5 and v.indi and v.indi.id  and Geo_Spells[v.indi.id].buff.id == buff.id and duplicate_id and not table.containskey(duplicate_id, v.indi.id) then 
 				local boost = 0
 				-- check if caster is recipient to add gemancy + bonus, else its an entrust and no boost is applied
@@ -211,6 +231,7 @@ function check_buffs()
 					end
 					boost = boost * Geo_Spells[v.indi.id]['Geomancy x']
 				end
+				-- the Trust Sylvie (UC): fixed values
 				if v.indi.caster == 'Sylvie(UC)' then
 					if Geo_Spells[v.indi.id].en == "Indi-Fury" then 
 						this_buff["Attack perc"] = 384	-- 37.5%, on the same 1/1024 scale as other Fury bubbles
@@ -232,6 +253,7 @@ function check_buffs()
 					end
 				end
 			end
+			-- a party GEO's Geo- bubble from their luopan
 			local luopan = v.geo and v.geo.id and v.mob and v.mob.pet_index and windower.ffxi.get_mob_by_index(v.mob.pet_index)
 			if luopan and luopan.distance:sqrt() < 6 and Geo_Spells[v.geo.id].buff.id == buff.id then
 				local boost = 0
@@ -253,6 +275,7 @@ function check_buffs()
 		end
 		
 		-- Cor Rolls
+		-- COR rolls: the value from the roll number (worked out in Action_Processing); a few rolls give two stats
 		for Job_abil_id, Roll_info in pairs(Cor_Rolls) do
 			if buff['full_name'] and  Roll_info.en == buff['full_name']  then
 				for i = 1, 2 do
@@ -275,6 +298,7 @@ function check_buffs()
 		end
 			
 		-- Bard Songs
+		-- BRD songs: song value from the bard's +songs (your list or //ig brd), merits, job points, Marcato / Soul Voice, then the empyrean-set bonus to the song's element stat
 		local temp = {}
 		for Song_id, Song_table in pairs(Bard_Songs) do
 			if buff['full_name'] and Song_table.en == buff['full_name']  then
@@ -289,6 +313,7 @@ function check_buffs()
 					local	Madrigal = 0
 					local Empy_bonus = 0
 					
+					-- +songs for this bard
 					if table.containskey(settings.Bards, buff.Caster) then
 						All_songs = settings.Bards[buff.Caster]['song_bonus']['all_songs']
 					else
@@ -303,6 +328,7 @@ function check_buffs()
 						potency = 1
 						msg = msg .. ' SV'
 					end
+					-- Honor March: needs Marsyas, so the Gjallarhorn bonus doesn't apply; it gives several stats
 					if buff.full_name == "Honor March" then
 						local int = 0
 						 if settings.Bards[buff.Caster] and settings.Bards[buff.Caster]['gjallarhorn'] then 
@@ -358,6 +384,7 @@ function check_buffs()
 							effects = Song_table.effect[1]
 						end
 					end
+					-- the song's element stat (7 = all): the empyrean set adds to it
 					if Song_table.element == 7 then
 						for i = 1, 7 do
 							if temp[ele_to_stat[Song_table.element].en[i]] and settings.Bards[buff.Caster] then
@@ -385,6 +412,7 @@ function check_buffs()
 							end
 						end
 					end
+					-- chat line once per song
 					if not this_buff['reported'] then
 						notice('① ' .. buff.Caster:ucfirst() .. ' → "'..buff.full_name ..'": '.. effects .. ' '..bonus..', '..ele_to_stat[Song_table.element].en..'+'..temp[ele_to_stat[Song_table.element].en]..', Potency = ' .. potency .. ', Song bonus +' .. temp['All_songs']  .. msg)
 						this_buff['reported'] = true
@@ -394,6 +422,7 @@ function check_buffs()
 			end
 		end
 		
+		-- store the song's stats on the buff
 		for k,v in pairs(temp) do
 			this_buff[k] = v
 		end
@@ -404,6 +433,8 @@ function check_buffs()
 	-- end
 end
 
+-- Adds up every buff's stats into Buffs_inform (the totals the cards use), and Haste Samba's job ability haste
+-- while you're engaged (main DNC samba is stronger: //ig dnc, or a main DNC in the party).
 function calculate_total_haste()
 	Buffs_inform = {['delay'] = 0,['DEF'] = 0,['HP'] = 0,['MP'] = 0,['STR'] = 0,['DEX'] = 0,['VIT'] = 0,['AGI'] = 0,['INT'] = 0,['MND'] = 0,['CHR'] = 0,
 								['Accuracy'] = 0,['Attack'] = 0, ['Attack perc'] = 0, ['Defense perc'] = 0,
@@ -439,6 +470,7 @@ function calculate_total_haste()
 	
 --	local temp_buffs = table.copy(_ExtraData.player.buff_details)
 
+	-- sum every buff's stats
 	for k, v in pairs(_ExtraData.player.buff_details) do
 		for index, value in pairs(v) do
 			if Buffs_inform[index] then

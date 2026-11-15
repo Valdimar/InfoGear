@@ -1,3 +1,15 @@
+-- Packet_parsing.lua
+-- Reads incoming packets the addon needs (dispatched by the 'incoming chunk' event in InfoGear.lua through the
+-- parse.i table: packet id -> handler):
+--   0x00A zone in       -> expect an empty buff packet next
+--   0x061 your stats    -> player.stats (base STR, DEX... without gear)
+--   0x062 your skills   -> player.skills, then skill without gear (get_player_skill_in_gear)
+--   0x063 your buffs    -> _ExtraData.player.buff_details: each buff with its end time, and which party member
+--                          cast it (matched with their Last_Spell from Action_Processing)
+--   0x0DD party member  -> their main / sub job
+--   0x076 party buffs   -> party members' buffs (Marcato, Soul Voice, Bolster, Blaze of Glory, Colure Active)
+-- update_party() rebuilds member_table from the party list. Much of this is GearInfo's original code.
+
 
 -- function get_packet_data()
 		
@@ -34,6 +46,7 @@ parse = {
     o={}  -- Outgoing packets, currently none are really parsed for information
     }
 	
+-- zone in: the next buff packet is the empty one sent while zoning (skipped)
 parse.i[0x00A] = function (data)
 	-- player.stats = {
 		-- STR = data:unpack('H',0xCD), 
@@ -48,6 +61,7 @@ parse.i[0x00A] = function (data)
 	blank_0x063_v9_inc = true
 end
 	
+-- base stats (without gear)
 parse.i[0x061] = function (data)	
 	player.stats = {
 		STR = data:unpack('H',0x15), 
@@ -61,6 +75,7 @@ parse.i[0x061] = function (data)
 	--notice('Player stat update | agi = '..player.stats.AGI)
 end
 
+-- skills as the game reports them (with gear), then gear skill taken off
 parse.i[0x062] = function (data)
     for i = 1,0x71,2 do
         local skill = data:unpack('H',i + 0x82)%32768
@@ -73,6 +88,9 @@ parse.i[0x062] = function (data)
 	--notice('Skill packet update')
 end
 
+-- Compares the new buff list (x) with the old one (y) when the end times shift (zoning, changing floors,
+-- waypoints): if every buff moved by the same amount it's a time shift, not new buffs, so the old buffs keep
+-- their caster / song info with the new times. buffs_to_ignore: level sync, battlefield, Vorseal etc.
 function check_these_buffs(x, y)
 	
 	local new_buffs = table.copy(x)
@@ -89,6 +107,7 @@ function check_these_buffs(x, y)
 	-- 										"Pathos", "Avatar's Favor", "Avoidance Down"}
 	local buffs_to_ignore = T{143, 254, 602, 603, 475, 612, 476, 259, 261, 262, 263, 264, 431, 572}
 	
+	-- pair up new and old buffs with the same id and note how much each one's time changed
 	for n, new in pairs(new_buffs) do
 		new_buffs[n].matched = nil
 		for i, old in pairs(old_buffs) do
@@ -121,6 +140,7 @@ function check_these_buffs(x, y)
 	local no_match_increment = 0
 	
 	--if max_l ~= nil then
+		-- do all the paired buffs share the same time change (within 1 s)?
 		for i = 1 , max_l do
 			for j = 1 , max_l do 
 				if i ~= j then
@@ -163,6 +183,7 @@ function check_these_buffs(x, y)
 		end
 	end
 	
+	-- yes: shift the old buffs' times; one odd buff out is allowed (a new buff at the same moment)
 	if time_match then
 		if debug_mode then print('All times matched') end
 		-- all buffs have matched and time increases are all the same, assume a buff dropped or there was a time shift to all buffs
@@ -204,6 +225,9 @@ function check_these_buffs(x, y)
 	end
 end
 
+-- Your buff list (0x063 type 9): up to 32 buff ids with their end times. Each new buff is matched with the
+-- old list: same buff, same time = unchanged; same buff, new time = recast (overwritten); not there before =
+-- new. New / recast buffs get full_name and Caster from the party member whose Last_Spell it was.
 parse.i[0x063] = function (data)
 	if data:byte(0x05) == 0x09 and blank_0x063_v9_inc then
         -- After zoning, players receive a blank 0x063 v9 packet
@@ -218,6 +242,7 @@ parse.i[0x063] = function (data)
             return
         end
     end
+    -- read the 32 buffs; the time is turned into a Unix time
     if data:byte(0x05) == 0x09 then
 		
         local newbuffs = {}
@@ -243,6 +268,7 @@ parse.i[0x063] = function (data)
             end
         end
 		
+        -- match with the buffs we had
         if seen_0x063_type9 then
 			
 			check_these_buffs(newbuffs, _ExtraData.player.buff_details)
@@ -302,6 +328,7 @@ parse.i[0x063] = function (data)
                     end
                 end
             end
+			-- buff name -> the spells that give it (a March buff can be Honor / Victory / Advancing March...)
 			local Buff_association = {
 					Haste = {'Haste', 'Haste II', 'Hastega', 'Hastega II', "Erratic Flutter", 'Refueling'},
 					March = {'Honor March', 'Victory March', 'Advancing March'},
@@ -320,6 +347,8 @@ parse.i[0x063] = function (data)
 					--Slow = {'Slow','Slow II','Slowga','Slowga II',},
 				}
 			
+			-- give each new / recast buff its caster and full spell name (from the party member whose Last_Spell it is):
+			-- exact matches keep theirs; also notes your own boosts (Marcato, Soul Voice, Blaze of Glory, Bolster)
 			for n,new in pairs(newbuffs) do
                 if new.matched_exactly then
                     newbuffs[n].matched_exactly = nil
@@ -408,12 +437,14 @@ parse.i[0x063] = function (data)
                 end
             end
             
+			-- buffs without a known spell keep their buff name
 			for n,new in pairs(newbuffs) do
 				if not table.containskey(newbuffs[n], "full_name") then
 					newbuffs[n].full_name = newbuffs[n].name
 				end
 			end	
 			
+            -- old buffs that are gone: a chat line for lost songs, and the GEO / BRD boost flags reset
             for i,old in pairs(_ExtraData.player.buff_details) do
                 if not (old.matched_exactly or old.matched_imprecisely) then
                     -- Old status was not matched to any new status, so it's assumed it was lost
@@ -441,6 +472,7 @@ parse.i[0x063] = function (data)
             end
         end
         
+        -- the new list replaces the old; player.buffs = the ids
         table.reassign(_ExtraData.player.buff_details,newbuffs)
         for i=1,32 do
 			player.buffs[i] = (newbuffs[i] and newbuffs[i].id) or nil
@@ -465,6 +497,7 @@ parse.i[0x063] = function (data)
     end
 end
 
+-- seconds between two os.date tables (same day)
 function convert_date(time_1, time_2)
 	local seconds = time_2.sec - time_1.sec
 	local minuits = time_2.min - time_1.min
@@ -475,6 +508,8 @@ function convert_date(time_1, time_2)
 end
 
 
+-- Rebuilds member_table from the party list (you + up to 5), keeping what was known about members who were
+-- already there (last spell, bubbles, boosts). Trust GEOs get their fixed Indi- bubble. Jobs come from 0x0DD.
 function update_party()
 	
 	local old = member_table
@@ -493,6 +528,7 @@ function update_party()
         end
 	end
 	
+	-- keep what we knew about members still in the party
 	for new_name, new_member in pairs(new) do
 		for old_name, old_member in pairs(old) do
 			if old_name == new_name then
@@ -521,6 +557,7 @@ function update_party()
 		end
 	end
 	
+	-- jobs: yours from the player, others from the 0x0DD packet
 	for new_name, new_member in pairs(new) do
 		if new_member.id == player.id then
 			new[new_name]['Main job'] = player.main_job
@@ -556,6 +593,7 @@ end
 
 -- party update packet
 	
+-- a party member's details: main / sub job by id
 parse.i[0x0DD] = function (data)
 
 	-- {ctype='unsigned int',      label='ID',                 fn=id},             -- 04
@@ -583,6 +621,9 @@ parse.i[0x0DD] = function (data)
 	-- ['Main job level'] = packet['Main job level'], ['Sub job level'] = packet['Sub job level']}
 end
 
+-- Party members' buffs (up to 5 others, 48 bytes each; buff ids are 10 bits: a low byte + 2 bits packed four
+-- to a byte). Notes the boosts that change their buffs on you, and drops a member's Indi- bubble when they no
+-- longer have Colure Active (612).
 parse.i[0x076] = function (data)
     -- buff marcato = 231, soul voice = 52 , "Troubadour" = 348 
 	local party_buffs = {}
@@ -717,6 +758,7 @@ end
 -- fields.outgoing[0x078] = L{
 -- }
 
+-- On load: run every handler once on the last packet of its kind, so stats, skills and buffs are known at once.
 function initialize_packet_parsing()
     for i,v in pairs(parse.i) do
         local lastpacket = windower.packets.last_incoming(i)

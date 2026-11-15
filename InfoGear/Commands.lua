@@ -14,6 +14,7 @@ local chat_d_blue = string.char(0x1F, 207)
 local chat_grey = string.char(0x1F, 160)
 local chat_l_blue = string.char(0x1E, 6)
 
+-- chat line: [InfoGear] text
 local function say(text) windower.add_to_chat(207, '[' .. _addon.name .. '] ' .. text) end
 
 -- 'on' / 'off' (or true / false / 1 / 0) -> true / false; nil when it's neither
@@ -26,6 +27,7 @@ end
 
 local function on_off(v) return v and 'on' or 'off' end
 
+-- a full copy of a table (each bard gets their own settings)
 local function deep_copy(t)
 	if type(t) ~= 'table' then return t end
 	local out = {}
@@ -56,6 +58,7 @@ main_card_toggles = {
 	{key = 'speed', setting = 'show_speed',       label = 'Movement speed'},
 }
 
+-- every main and extra card on / off
 local function set_all_cards(value)
 	for _, m in ipairs(main_card_toggles) do settings.player[m.setting] = value end
 	settings.player.cards = settings.player.cards or {}
@@ -107,6 +110,7 @@ local function set_card(name, value)
 	return false
 end
 
+-- //ig cards: every card by group, * = shown
 function cards_list()
 	local cards = settings.player.cards or {}
 	say('Cards (* = shown). //ig show <name> or <group>, //ig hide <name>, //ig show all, //ig hide all:')
@@ -122,6 +126,7 @@ function cards_list()
 	end
 end
 
+-- //ig show / hide: value_default nil = flip (show), false = off (hide)
 local function show_command(args, value_default)
 	local name = args[1] and tostring(args[1]):lower()
 	if not name then
@@ -158,6 +163,7 @@ local manual_numbers = {
 }
 local manual_order = {'stp', 'dw', 'dwn', 'ghaste', 'mhaste', 'jahaste'}
 
+-- //ig stp / dw / dwn / ghaste / mhaste / jahaste [n]
 local function manual_command(name, args)
 	local m = manual_numbers[name]
 	local v = number_arg(args[1])
@@ -170,6 +176,7 @@ local function manual_command(name, args)
 	end
 end
 
+-- //ig manual [clear]
 local function manual_list_command(args)
 	if args[1] and tostring(args[1]):lower() == 'clear' then
 		for _, k in ipairs(manual_order) do _G[manual_numbers[k].var] = 0 end
@@ -192,6 +199,7 @@ local party_jobs = {
 	geo = {list = 'Geos',  manual = 'manual_GEO_bonus',           what = 'Geomancy +#',              job = 'GEO'},
 }
 
+-- //ig brd / cor / geo: the default bonus, your list of named players, and COR's roll messages
 local function party_job_command(name, args)
 	local p = party_jobs[name]
 	settings[p.list] = settings[p.list] or {}
@@ -253,6 +261,7 @@ local topics = {
 	{key = 'misc',    title = 'Other'},
 }
 
+-- a command handled in Extras.lua
 local function extras(name) return function(args) extras_command(name, args) end end
 
 ig_commands = {
@@ -370,6 +379,7 @@ local function help_line(c)
 	windower.add_to_chat(207, '  ' .. chat_l_blue .. '//ig ' .. c.usage .. chat_white .. '  ' .. c.help .. alias)
 end
 
+-- //ig help [topic | command]
 local function help_command(args)
 	local want = args[1] and tostring(args[1]):lower()
 	if want then
@@ -434,6 +444,8 @@ local function distance(a, b)	-- edit distance, for "did you mean"
 	return d[#a][#b]
 end
 
+-- Runs one //ig command (the addon command event in InfoGear.lua calls this). Unknown words: a card name toggles
+-- that card, anything else gets "Did you mean ...?" (the closest command by edit distance).
 function infogear_command(command, ...)
 	local args = {...}
 	command = command and tostring(command):lower()

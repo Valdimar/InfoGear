@@ -1,3 +1,7 @@
+-- res/Martial_Arts_Gear.lua
+-- Gear with Martial Arts, by item id: delay = how much it lowers your hand-to-hand delay. Used by
+-- Calculator.determine_Weapon_Delay. From GearInfo.
+
 return {
 	[11734] = {id=11734,en="Shaolin Belt", delay=10},
 	[11602] = {id=11602,en="Cirque Necklace", delay=10},

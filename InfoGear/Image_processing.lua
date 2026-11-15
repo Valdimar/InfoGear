@@ -1,3 +1,11 @@
+-- Image_processing.lua
+-- Draws the display with Windower primitives (images) and texts: one background panel and one card per block.
+-- Windower draws things in the order they were made, so the panel is made first and the cards on top of it.
+-- ImageBlock is a small class: ImageBlock.New(...) makes a panel or a card (image + caption text + value text),
+-- the methods move / resize / recolour / delete it. Where each card goes comes from Layouts.lua (check_positions).
+-- The mouse handler lets you drag the panel (everything follows) unless the display is locked.
+
+-- while dragging: {image = the panel, x / y = where on the panel it was grabbed}
 local dragged
 function is_dragging() return dragged ~= nil end	-- (v1.27) the hover box stays hidden while dragging
 
@@ -19,6 +27,7 @@ end
 
 math.randomseed(os.clock())
 
+-- the colour names a card can be made with (the caption colour itself comes from Layouts.lua)
 imageColors = L{'red','blue','green','dark-blue','grey','light-green','orange','pink','purple','yellow'}
 
 --[[ui scaling shrinks display 
@@ -39,15 +48,23 @@ ImageBlock = {
 	red = 255,
 	green = 255,
 	blue = 255,
+	-- (visible / draggable are also method names below: in a table like this the later entry wins, so on a new
+	-- object they're the methods. show() / hide() then overwrite visible with true / false, after which :visible()
+	-- and :hover() can't be called on that object; nothing calls show() / hide() on the cards.)
 	visible = true,
 	draggable = false,
 	fit = true,
 
+	-- Makes a background panel (image_type 'background', only one) or a card ('block', order = its slot number,
+	-- image_color one of imageColors, text1 = caption, text2 = value). Returns the object; sections.background /
+	-- sections.block[n] keep it. The card's texts are made here; their size, colour and place are set by
+	-- check_positions() / centre_all_text() right after.
 	New = function(order, image_type, image_color, text1, text2)
 		local o = {}
 		for k, v in pairs(ImageBlock) do
 			o[k] = v
 		end
+		-- a background has order 0; two cards can't share a slot
 		local order_exists = false
 		if table.length(sections) > 0 then
 			if sections[image_type] and image_type == 'background' then
@@ -71,6 +88,7 @@ ImageBlock = {
 			end
 		end
 		
+		-- the panel: textures/cards/panel.png, stretched to the layout's size, draggable
 		if image_type == 'background' then
 			o.width = 228
 			o.height = 42
@@ -86,6 +104,7 @@ ImageBlock = {
 			o.name = (_addon and _addon.name or 'image') .. '_gensym_' .. tostring(t):sub(8) .. '_%.8x':format(16^8 * math.random()):sub(3)
 			o.x = settings.display.pos.x
 			o.y = settings.display.pos.y
+		-- a card: textures/cards/card.png, a caption (text 1) and a value (text 2)
 		elseif image_type == 'block' then
 			if imageColors:contains(image_color) then
 				o.width = 57
@@ -136,6 +155,7 @@ ImageBlock = {
 			return error('Wrong image type!')
 		end
 
+		-- the image itself
 		windower.prim.create(o.name)
 		windower.prim.set_color(o.name, o.alpha, o.red, o.green, o.blue)
 		windower.prim.set_texture(o.name, o.image_path)
@@ -171,6 +191,7 @@ ImageBlock = {
 		windower.prim.set_visibility(self.name, visible)
 	end,
 	
+	-- Moves the image (and its texts) to (new_x, new_y); with no arguments returns its position.
 	position = function(self, new_x, new_y)
 		if new_x == nil then
 			return self.x, self.y
@@ -184,6 +205,7 @@ ImageBlock = {
 		end
 	end,
 	
+	-- x only (get or set)
 	position_x = function(self, new_x)
 		if new_x == nil then
 			return self.x
@@ -195,6 +217,7 @@ ImageBlock = {
 		end
 	end,
 	
+	-- y only (get or set)
 	position_y = function(self, new_y)
 		if new_y == nil then
 			return self.y
@@ -206,6 +229,7 @@ ImageBlock = {
 		end
 	end,
 	
+	-- Resizes the image; with no arguments returns its size.
 	image_size = function(self, width, height)
 		if width == nil then
 			return self.width, self.height
@@ -232,6 +256,7 @@ ImageBlock = {
 		self:size(self.width, height)
 	end,
 	
+	-- The image's bottom-right corner.
 	get_extents = function(self)
 		
 		local ext_x = self.x + self.width
@@ -240,6 +265,7 @@ ImageBlock = {
 		return ext_x, ext_y
 	end,
 	
+	-- Whether the mouse is over the image.
 	hover = function(self, mouse_x, mouse_y)
 		if not self:visible() then
 			return false
@@ -266,6 +292,7 @@ ImageBlock = {
 		
 	end,
 	
+	-- Gets / sets whether it can be dragged (the panel uses the method being there as 'yes').
 	draggable = function(self, drag)
 		if drag == nil then
 			return self.draggable
@@ -274,6 +301,7 @@ ImageBlock = {
 		self.draggable = drag
 	end,
 	
+	-- Tints the image; with no arguments returns the tint.
 	image_color = function(self, red, green, blue)
 		if red == nil then
 			return self.red, self.green, self.blue
@@ -285,6 +313,7 @@ ImageBlock = {
 		self.blue = blue
 	end,
 	
+	-- Sets the transparency (0-255); with no arguments returns it.
 	image_alpha = function(self, alpha)
 		if alpha == nil then
 			return self.alpha
@@ -294,6 +323,7 @@ ImageBlock = {
 		self.alpha = alpha
 	end,
 	
+	-- This image's offset from another one.
 	pos_diff = function (self, t)
 		local self_x, self_y = self:position()
 		local bg_x, bg_y = t:position()
@@ -301,6 +331,7 @@ ImageBlock = {
 		return self_x - bg_x , self_y - bg_y
 	end,
 	
+	-- Removes the image and its texts, takes it out of sections, and lays the rest out again.
 	delete = function(self)
 		windower.prim.delete(self.name)
 		for k, v in pairs(sections) do
@@ -331,6 +362,8 @@ ImageBlock = {
 -- end
 
 -- Handle drag and drop
+-- Dragging the panel: press on it (type 1), move (type 0: everything follows), release (type 2: the new
+-- position is saved). Not while locked (//ig lock) or hidden in a cutscene.
 windower.register_event('mouse', function(type, x, y, delta, blocked)
     if blocked then
         return

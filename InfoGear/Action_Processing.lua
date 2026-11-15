@@ -1,4 +1,11 @@
+-- Action_Processing.lua
+-- Watches actions (Windower 'action' event): who cast what on you, so the buff code knows the caster, the spell
+-- tier, the roll number and bonuses like Marcato / Bolster that the buff itself doesn't show. Results go into
+-- member_table (per party member: Last_Spell, indi / geo bubble, Crooked Cards...) and buff_details.
+-- Also: Haste Samba proc detection and whether you're moving (sent to Gearswap).
 
+
+-- Called for every action packet (registered at the bottom of this file).
 function on_action(action)
 
 	-- 1. Melee attack
@@ -22,6 +29,7 @@ function on_action(action)
 	-- so we use currently saved mob structures with our party list to aquire relevent information
 	
 	if action == nil then return end
+	-- the party member who did it (only party members are tracked)
 	local actor = {}
 	for index, m_table in pairs(member_table) do
 		if member_table[index].id == action.actor_id then
@@ -31,6 +39,7 @@ function on_action(action)
 	end
 	if actor == nil then return end
 	
+	-- spells / abilities whose caster matters for the buff value (songs, haste, GEO bubbles, their boosts)
 	local spells_to_watch = S{'Marcato', 'Soul Voice', 
 											'Bolster','Ecliptic Attrition','Blaze of Glory',
 											'Haste', 'Haste II', 'Hastega', 'Hastega II', "Erratic Flutter", 'Refueling', 
@@ -51,6 +60,7 @@ function on_action(action)
 											--'Slow','Slow II','Slowga','Slowga II',
 											}
 	-- check for haste spikes from haste samba
+	-- your melee hit with the Haste Samba additional effect (animation 23) -> Haste Samba is up
 	if action.actor_id == player.id and action.category == 1 then
 		if action.targets[1].actions[1].reaction == 8 then
 			if action.targets[1].actions[1].add_effect_animation == 23 then
@@ -67,6 +77,7 @@ function on_action(action)
 	end
 	
 	-- check for cor rolls
+	-- a Phantom Roll (or Double-Up, 123) on you: work out its value from the roll number
 	if action.category == 6 and (table.containskey(Cor_Rolls, action.param) or action.param == 123) and ((actor.is_npc and actor.charmed) or not actor.is_npc) then
 		--notice('Step 1: ' .. action.param .. ' ' .. res.job_abilities[action.param].en)
 		for index, target in pairs(action.targets) do
@@ -80,6 +91,7 @@ function on_action(action)
 							local rollID = action.param
 							local rollNum = action.targets[1].actions[1].param
 							local buff_potency = {}
+							-- the COR's Phantom Roll +# (your list, or //ig cor)
 							local Roll_bonus = 0
 							-- check if we know the COR from the settings file for boost to phantom roll
 							if table.containskey(settings.Cors, member_table[index].name:lower()) then
@@ -88,6 +100,7 @@ function on_action(action)
 								Roll_bonus = manual_COR_bonus
 							end
 							
+							-- Crooked Cards: +20% on the roll after it was used
 							if Crooked_cards.name == Cor_Rolls[rollID].en or Crooked_cards.name == '' and Crooked_cards.bool then
 								Crooked_cards = {name = Cor_Rolls[rollID].en, bool = false}
 							else
@@ -99,6 +112,7 @@ function on_action(action)
 							if Crooked_cards.name == Cor_Rolls[rollID].en then
 								cc_bonus = 1.2
 							end
+							-- 12 = bust (a penalty); Companion's Roll (304) gives two values
 							if rollNum == 12 and Cor_Rolls[rollID].bust  ~= "?" then
 								buff_potency[1] = Cor_Rolls[rollID].bust * cc_bonus
 							elseif Cor_Rolls[rollID].roll[rollNum] ~= "?" then
@@ -113,6 +127,7 @@ function on_action(action)
 								buff_potency = {'?'}
 							end
 
+							-- + the job bonus when that job is in the party (or the empyrean / relic gear bonus, assumed for others)
 							for k, v in pairs(member_table) do																
 								if Cor_Rolls[rollID]['bonus']['Main job'] == v['Main job'] and v['Main job'] ~= 'NON'  then
 									buff_potency[1] = buff_potency[1] + Cor_Rolls[rollID]['bonus'].effect
@@ -145,6 +160,7 @@ function on_action(action)
 								end
 							end
 							
+							-- remember the roll on the COR
 							member_table[index] = {id = member_table[index].id, name = member_table[index].name, mob = member_table[index].mob,  Last_Spell = Cor_Rolls[rollID].en, 
 																	effect = Cor_Rolls[rollID].effect, value = buff_potency, ['Main job']=member_table[index]['Main job'], ['Sub job']=member_table[index]['Sub job'], 
 																	buffs=member_table[index].buffs, indi=member_table[index].indi, geo=member_table[index].geo, pet=member_table[index].pet}
@@ -160,6 +176,7 @@ function on_action(action)
 								end
 							end
 							
+							-- the roll's chat message (//ig cor msgs): who it hit, lucky / bust, the value
 							local partyColour = {
 								p0 = string.char(0x1E, 247),
 								p1 = string.char(0x1F, 204),
@@ -225,6 +242,7 @@ function on_action(action)
 				end
 			end
 		end
+	-- other job abilities: Crooked Cards (392), Ecliptic Attrition (347: +25% on the caster's luopan)
 	elseif action.category == 6 and ((actor.is_npc and actor.charmed) or not actor.is_npc) then
 		--notice('Step 1: ' .. action.param .. ' ' .. res.job_abilities[action.param].en)
 		for index, target in pairs(action.targets) do
@@ -250,6 +268,7 @@ function on_action(action)
 	end
 	
 	
+	-- a pet's ability starting: find whose pet it is (for Garuda's Hastega)
 	if action.category == 7 and ((actor.is_npc and actor.charmed) or not actor.is_npc) then
 		for index, target in pairs(action.targets) do
 			if type(target) == "table" then
@@ -265,6 +284,7 @@ function on_action(action)
 		end		
 	end
 	--pet abilities
+	-- the pet ability landing on you: remember it on the pet's owner
 	if action.category == 13 and ((actor.is_npc and actor.charmed) or not actor.is_npc) and (action.param < 781 and action.param > 15 )then
 		--table.vprint(action)
 		local job_abil = res.job_abilities[action.param]
@@ -281,6 +301,7 @@ function on_action(action)
 			end
 		end
 	end
+	-- a spell landing: Regen / Refresh tier, songs and bubbles (who cast them, Bolster / Blaze of Glory)
 	if action.category == 4 and ((actor.is_npc and actor.charmed) or not actor.is_npc) and (action.param < 879 and action.param > 0 ) then
 		local spell = res.spells[action.param]
 		-- (v1.26) remember the tier of the last Regen / Refresh cast on you, for the Regen / Refresh cards
@@ -292,6 +313,7 @@ function on_action(action)
 				end
 			end
 		end
+		-- every target
 		for index, target in pairs(action.targets) do
 			if type(target) == "table" then
 				--if target.id == player.id then
@@ -344,12 +366,14 @@ function on_action(action)
 	end
 end
 
+-- every action packet, once you're logged in
 windower.register_event('action', function(act)
 	if windower.ffxi.get_info().logged_in then
 		on_action(act)
 	end
 end)
 
+-- Whether you moved since the last check (compares your position); sent to Gearswap with the haste numbers.
 function check_player_movement(player)
 	if player.position == nil then
 		player.position = {x = 0, y = 0, z = 0}

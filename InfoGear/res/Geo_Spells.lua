@@ -1,3 +1,7 @@
+-- res/Geo_Spells.lua
+-- GEO bubbles, by spell id: effect = the stat(s), "900 skill" = the value at 900 Geomancy skill, 'Geomancy x' = how
+-- much each Geomancy +1 adds, buff = the status effect it gives you. Used by check_buffs (Buff_Processing.lua).
+
 return {
 	[768]={id=768,en="Indi-Regen",			element=6,effect={[1]="Regen",},											["900 skill"]=30,['Geomancy x']=2,		buff= {id=539,en="Regen",							},},
 	[770]={id=770,en="Indi-Refresh",			element=6,effect={[1]="Refresh",},										["900 skill"]=6,['Geomancy x']=1,		buff= {id=541,en="Refresh",						},},

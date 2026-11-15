@@ -58,6 +58,7 @@ local function negate(x)
 	return -x
 end
 
+-- nothing or hand-to-hand weapon in the main hand
 local function is_hand_to_hand()
 	return player.equipment.main.skill == "Hand-to-Hand" or player.equipment.main.en == ''
 end
@@ -188,6 +189,7 @@ local function main_sub_range_widgets(total, main_idx, sub_idx, range_idx, color
 	end
 end
 
+-- blocks 12, 13 (main / off hand) and 19 (ranged); the totals are also noted for percent food (Extras.lua) and the Hit % card
 local function update_acc_widgets()
 	if settings.player.show_acc_Stuff ~= true then
 		remove_blocks(12, 13, 19)
@@ -200,6 +202,7 @@ local function update_acc_widgets()
 	main_sub_range_widgets(t, 12, 13, 19, 'yellow', 'Acc.', 'R.Acc.')
 end
 
+-- blocks 14, 15 and 21, the same way
 local function update_att_widgets()
 	if settings.player.show_att_Stuff ~= true then
 		remove_blocks(14, 15, 21)
@@ -284,16 +287,17 @@ function get_movement_speed_percent()
 end
 
 -------------------------------------------------------------------------------------------------------------
--- (v1.7) extra stat cards 31-58 (list, labels and groups in Layouts.lua: extra_cards)
--- Gear totals include augments and set bonuses. Where InfoGear also tracks the stat from buffs (GEO bubbles,
--- rolls...), that is added. Job traits, job points and merits are NOT included, so these are your gear's numbers.
--- Each returns value, over_cap.
+-- (v1.7) extra stat cards 31-63 (list, labels and groups in Layouts.lua: extra_cards)
+-- G(stat) = gear totals (augments, set bonuses, food, Ionis etc. included); B(stat) = buffs InfoGear tracks for the
+-- same stat (GEO bubbles, rolls, songs...); T(card) = job traits, merits and job point gifts (v1.29, Job_Traits.lua).
+-- Each returns value, over_cap (over_cap = show the number red).
 -------------------------------------------------------------------------------------------------------------
 local function G(k) return (Gear_info and Gear_info[k]) or 0 end
 local function B(k) return (Buffs_inform and Buffs_inform[k]) or 0 end
 -- (v1.29) job traits, merits and job point gifts for a card (Job_Traits.lua)
 local function T(key) return (card_trait_total and card_trait_total(key)) or 0 end
 
+-- card key -> function returning its value (and whether it's over the cap); keys are the ones in extra_cards
 extra_card_values = {
 	-- caps from BG-Wiki: Fast Cast 80%, Magic Burst Bonus (I) 40% from gear, Cure Potency 50%, Cure Potency II 30%,
 	-- Subtle Blow 50% each and 75% together, Snapshot 70% from all sources
@@ -368,6 +372,7 @@ function pet_innate_name()
 	if main == 'GEO' then return 'luopan' end
 	return nil
 end
+-- the innate damage taken -% of that pet (0 if none)
 function pet_innate_dt()
 	local which = pet_innate_name()
 	if which == 'wyvern' then return wyvern_innate_dt end
@@ -380,12 +385,14 @@ end
 pet_main_jobs = {BST = true, DRG = true, SMN = true, PUP = true, GEO = true}
 pet_sub_jobs = {SMN = true, BST = true}
 
+-- true on a job that can have a pet out (pet cards are hidden otherwise)
 function is_pet_job()
 	local main = player and player.main_job and tostring(player.main_job):upper()
 	local sub = player and player.sub_job and tostring(player.sub_job):upper()
 	return (main and pet_main_jobs[main]) or (sub and pet_sub_jobs[sub]) or false
 end
 
+-- blocks 31-63: every extra card that is on (pet cards only on a pet job) is drawn, the others removed
 local function update_extra_cards()
 	local on = settings.player.cards or {}
 	local pet_job = is_pet_job()
@@ -400,6 +407,7 @@ local function update_extra_cards()
 	end
 end
 
+-- block 30 (movement speed, green; red while slower than normal)
 local function update_speed_widget()
 	if settings.player.show_speed ~= true then
 		remove_blocks(30)

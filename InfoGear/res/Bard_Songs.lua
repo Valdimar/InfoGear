@@ -1,3 +1,8 @@
+-- res/Bard_Songs.lua
+-- Bard songs, by spell id: en = name, element = the element whose stat the empyrean set raises with it (Statics
+-- ele_to_stat, 7 = all), effect = the stat(s) it gives, ["Bard Bonus"][n] = its value with +n songs (Honor March:
+-- a list of values, one per effect). Used by check_buffs (Buff_Processing.lua). From GearInfo.
+
 return {
 	[378]={id=378,en="Army's Paeon",element=6,			effect={[1]="Regen"},["Bard Bonus"]={[0]=2,[1]=3,[2]=4,[3]=5,[4]=6,[5]=7,[6]=8,[7]=9,[8]=10,[9]=11,[10]=0,},},
 	[379]={id=379,en="Army's Paeon II",element=6,		effect={[1]="Regen"},["Bard Bonus"]={[0]=3,[1]=4,[2]=5,[3]=6,[4]=7,[5]=8,[6]=9,[7]=10,[8]=11,[9]=12,[10]=0,},},

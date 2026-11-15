@@ -353,3 +353,9 @@ except for the intentional changes below. A deliberately injected bug is detecte
 * Unknown commands say "Did you mean ...?" instead of printing the whole help.
 * Fixed: `//ig brd`, `cor`, `geo`, `save`, `delete` with nothing after them crashed; every bard added with `brd add` shared one settings table (changing one changed all); `geo add` saved the bonus as text; help showed `//gs stp` instead of `//ig stp`; typos ("maunal", "Duel Wield"); the leftover `//ig test` command is gone.
 * Every chat message now reads `[InfoGear] ...`.
+
+## v1.31 – comments everywhere, two fixes
+
+* **Comments** in every file: each file starts with what it does and how it fits in, and every function, table and tricky block says what it is for. The code itself is unchanged (checked token by token against 1.30, comments ignored); a few old comments that had gone out of date are corrected (cards 31-63, how UGS is placed, the extra cards now counting job traits).
+* **Fix:** after a weapon change, weapon skill could be taken off twice (the skills packet and the weapon-change refresh both worked on the game's own skill table), so Acc / Att could stay too low until the next skills packet. Skill without gear is now worked out on a copy.
+* **Fix:** Ionis's Accuracy +20 was counted twice in Adoulin (the buff code and res/Field_Buffs.lua). It's now only in the buff code (with Ranged Accuracy +20 and its 3% haste); Field_Buffs adds the Evasion +20.
