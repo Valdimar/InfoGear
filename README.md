@@ -1,4 +1,4 @@
-# InfoGear v1.32
+# InfoGear v1.33
 
 InfoGear is a patched and restructured fork of **GearInfo** by Sebyg666 (https://github.com/sebyg666/GearInfo),
 based on GearInfo 1.7.2.9. See CHANGES.md in the package for everything that was fixed or changed.
@@ -226,18 +226,22 @@ the only art is `textures/cards/card.png` and `textures/cards/panel.png`.
 
   ```
   [InfoGear] Loaded profile layout for Valdimar.
-  [InfoGear] Author: Valdimar @ Phoenix 1.32, based on GearInfo by Sebyg666
+  [InfoGear] Author: Valdimar @ Phoenix 1.33, based on GearInfo by Sebyg666
   ```
 * At the top of `Layouts.lua`: `card_columns` (4, the default for `//ig columns`), `card_caption_size` / `card_value_size` (fonts), `card_order`, `card_caption_colors` and `card_alert` (the over-cap red).
 ## Update check
 
-A few seconds after you log in, InfoGear checks GitHub once for a newer version. If there is one,
-chat says so:
+A few seconds after you log in, InfoGear checks GitHub once and always says in chat what it found:
 
 ```
-[InfoGear] Version X.Y is out (you have 1.32). Get it from github.com/Valdimar/InfoGear
+[InfoGear] Up to date (version 1.33).
+[InfoGear] UPDATE AVAILABLE: version X.Y is out (you have 1.33). Get it from github.com/Valdimar/InfoGear
+[InfoGear] Version 1.33 is newer than GitHub (1.32), so it hasn't been released yet.
+[InfoGear] Couldn't check for updates (GitHub didn't answer). Try again with a reload.
 ```
 
-It only speaks up when GitHub has a newer version, and stays quiet if GitHub can't be reached.
+"UPDATE AVAILABLE" is shown in a different colour so it stands out. "Newer than GitHub" means the version you
+have hasn't been released there yet. "Couldn't check" means GitHub didn't answer (or Windower has no HTTPS
+support); reload the addon to try again.
 The game can pause for a moment while it checks (at most 3 seconds, usually much less).
 
